@@ -1,0 +1,57 @@
+This is BibTeX, Version 0.99d (TeX Live 2025)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: AntiFlipper_v7_revised.aux
+The style file: IEEEtran.bst
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Database file #1: IEEEabrv.bib
+Database file #2: bibliography_updated.bib
+-- IEEEtran.bst version 1.14 (2015/08/26) by Michael Shell.
+-- http://www.michaelshell.org/tex/ieeetran/bibtex/
+-- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
+
+Done.
+You've used 27 entries,
+            4087 wiz_defined-function locations,
+            1509 strings with 23636 characters,
+and the built_in function-call counts, 23340 in all, are:
+= -- 1818
+> -- 653
+< -- 200
++ -- 369
+- -- 129
+* -- 1130
+:= -- 3290
+add.period$ -- 60
+call.type$ -- 27
+change.case$ -- 27
+chr.to.int$ -- 489
+cite$ -- 27
+duplicate$ -- 1634
+empty$ -- 1863
+format.name$ -- 141
+if$ -- 5484
+int.to.chr$ -- 0
+int.to.str$ -- 27
+missing$ -- 290
+newline$ -- 106
+num.names$ -- 27
+pop$ -- 705
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 2
+skip$ -- 1778
+stack$ -- 0
+substring$ -- 1221
+swap$ -- 1364
+text.length$ -- 37
+text.prefix$ -- 0
+top$ -- 5
+type$ -- 27
+warning$ -- 0
+while$ -- 101
+width$ -- 29
+write$ -- 279

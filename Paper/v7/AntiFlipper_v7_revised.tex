@@ -1,0 +1,432 @@
+\documentclass[conference]{IEEEtran}
+
+\IEEEoverridecommandlockouts
+\usepackage{verbatim}
+\DeclareMathAlphabet{\mathpzc}{OT1}{pzc}{m}{it}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{fancyhdr}
+\usepackage[
+top    = 0.7in,
+bottom = 1in,
+left   = 0.65in,
+right  = 0.59in]{geometry}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage{float}
+\restylefloat{figure}
+\usepackage[normalem]{ulem}
+\useunder{\uline}{\ul}{}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage{algpseudocode}
+\usepackage{float}
+\usepackage{tabularx}
+\usepackage{ltablex}
+\floatname{algorithm}{}
+
+
+\begin{document}
+
+\title{AntiFLipper: A Secure and Efficient Defense Against Label-Flipping Attacks in Federated Learning}
+
+\author{\IEEEauthorblockN{Aashnan Rahman$^{1}$, Abid Hasan$^{2}$, Sherajul Arifin$^{3}$, Faisal Haque Bappy$^{4}$, Tahrim Hossain$^{5}$,\\ Tariqul Islam$^{6}$, Abu Raihan Mostofa Kamal$^{7}$, and Md. Azam Hossain$^{8}$}
+
+\IEEEauthorblockA{
+$^{1, 2, 7, 8}$ Islamic University of Technology, Bangladesh.\\
+$^{3}$ United International University, Bangladesh.\\
+$ ^{4, 5, 6}$ Syracuse University, United States.\\
+Email: \{aashnanrahman@iut-dhaka, abidhasan32@iut-dhaka, sherajul@cse.uiu.ac.bd,\\ fbappy@syr, mhossa22@syr, mtislam@syr, azam@iut-dhaka, raihan.kamal@iut-dhaka\}.edu} 
+}
+
+\maketitle
+\pagestyle{empty}
+
+\begin{abstract}
+Federated learning (FL) enables privacy-preserving model training by keeping data decentralized. However, it remains vulnerable to label-flipping attacks, where malicious clients manipulate labels to poison the global model. Despite their simplicity, these attacks can severely degrade model performance, and defending against them remains challenging. We introduce AntiFLipper, a novel and computationally efficient defense against multi-class label-flipping attacks in FL. \textcolor{blue}{The attacker's capability is strictly limited to local data manipulation (label-flipping), without access to model updates or server components.} Unlike existing methods that ensure security at the cost of high computational overhead, AntiFLipper employs a novel \textcolor{blue}{client-side evaluation strategy computing accuracy locally and sharing only a scalar score with the server,  }significantly reducing the central server's burden during aggregation and making the approach suitable for edge networks. Comprehensive empirical evaluations across multiple datasets under different distributions demonstrate that AntiFLipper achieves accuracy comparable to state-of-the-art defenses while requiring substantially fewer computational resources on the server side. By balancing security and efficiency, AntiFLipper addresses a critical gap in existing defenses, making it particularly suitable for resource-constrained FL deployments (e.g., IoT) where both model integrity and operational efficiency are essential.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Federated Learning, Label Flipping Attack, Malicious Node Detection, Attack Mitigation, IoT, Edge Networks
+\end{IEEEkeywords}
+
+
+\section{Introduction}
+
+\textcolor{blue}{Federated learning (FL) has emerged as a prominent distributed learning paradigm for communication networks and edge computing systems, enabling geographically dispersed clients such as mobile devices, IoT sensors, and edge devices to collaboratively train a global model without sharing raw data~\cite{fedavg-pmlr-v54-mcmahan17a,li2020federated}. By exchanging only model updates, FL satisfies the strict privacy requirements of applications in healthcare, finance, and industrial IoT. However, the decentralized nature of FL exposes it to data poisoning attacks~\cite{kairouz2021advances,lyu2020threats}, among which \textit{label-flipping attacks} are particularly concerning for networked deployments. In this attack, malicious clients deliberately mislabel their local training data before submitting model updates. Critically, the attacker's capability is strictly limited to this local label manipulation, they cannot modify model updates, intercept communications, or access any server or peer data. Despite this simplicity, even a small fraction of compromised clients can cause substantial degradation of the global model~\cite{biggio2011support,tolpegin2020data}, posing a direct threat to the reliability of FL-enabled distributed systems \cite{bagdasaryan2020backdoor}.} 
+
+Existing defenses typically rely on server-side anomaly detection or robust aggregation, requiring the server to inspect, cluster, or compare all client updates~\cite{nguyen2022flame,yin2018byzantine,NIPS2017_f4b9ec30}. \textcolor{blue}{This introduces significant computational overhead at the aggregation server and, in some cases, requires the server to maintain a clean labeled reference dataset~\cite{cao2020fltrust}---a privacy concern that contradicts FL's data-minimization principles. Lightweight defenses, on the other hand, often fail under non-IID data distributions prevalent in heterogeneous wireless networks~\cite{fung2020limitations}.}
+
+\textcolor{blue}{To address these limitations, we propose AntiFLipper, a defense that shifts detection to the client side through local accuracy evaluation, avoiding server-side model inspection entirely. Unlike approaches that depend on server-held reference data or expensive cryptographic mechanisms, AntiFLipper infers trust from relative client performance deviations, making it well-suited for resource-constrained edge and IoT deployments.}
+
+The core contributions of this paper are:
+
+\begin{itemize}
+   \item \textbf{Attack Detection \& Mitigation:} We propose AntiFLipper, a novel trust-based weighted aggregation method that detects and mitigates multi-class label-flipping attacks by identifying and excluding malicious clients, even in dynamic attack scenarios.
+
+   \item \textbf{Accuracy and Efficiency:} AntiFLipper matches or exceeds state-of-the-art defenses in accuracy while achieving significantly lower aggregation time by avoiding server-side model update inspection.
+
+   \item \textbf{Improved Scalability:} By shifting detection to client devices, AntiFLipper minimizes server burden, improving scalability in large-scale decentralized networks.
+    
+    %\item \textcolor{blue}{\textbf{Privacy-Preserving Client-Side Evaluation:} AntiFLipper relies on a trusted client-side evaluation module that shares only a scalar accuracy value with the server---no raw data or model gradients are exposed---enabling robust detection without any server-held reference data.}
+\end{itemize}
+
+
+    The remainder of the paper is structured as follows. In Section \ref{sec:problem Statement}, we describe the problem statement and our research objectives. In Section \ref{sec:relatedworks}, we review existing work related to the detection and defense against label-flipping attacks by malicious clients in federated learning scenarios. In Section \ref{sec:methodology}, we present AntiFLipper in detail.  In Section \ref{sec:implement&eval} we present system implementation and performance evaluation. In Section \ref{sec:securityanalysis}, we provide a security analysis, discussing the robustness of our approach in mitigating malicious attacks, including its behavior under adaptive and colluding adversaries. In Section \ref{sec:overhead}, we analyze the computational and communication overhead introduced by client-side evaluation. Section~\ref{sec:limitations} discusses the limitations of our approach and threats to validity. Finally, Section \ref{sec:conclusion} summarizes the key findings and concludes the paper.
+
+
+\section{Problem Statement}
+\label{sec:problem Statement}
+
+\subsection{Label Flipping Attack}
+Let \(C = \{c_1, c_2, \ldots, c_n\}\) be the set of clients participating in the federated learning process. Each client \( c_i \in C \) possesses a local dataset \(D_i = \{(x_k, y_k)\}_{k=1}^{m_i},\) where \( x_k \in \mathcal{X} \) is the input feature and \( y_k \in \mathcal{Y} \) is the true class label. \textcolor{blue}{In our threat model, the adversary is strictly limited to manipulating its local data (i.e., label-flipping) and has no capability beyond this scope.} In a label-flipping attack, the adversary modifies this dataset into a corrupted version \(D'_i = \{(x_k, y'_k)\}_{k=1}^{m_i},\) such that \( y'_k \neq y_k \) for a substantial subset of the data~\cite{wang2020attack}. These poisoned labels cause the local model \( m'_i \), trained on \( D'_i \), to encode incorrect decision boundaries. A common variant is the \textit{targeted label-flipping attack}, where the adversary selects a source class \( s \in \mathcal{Y} \) and a target class \( \tau \in \mathcal{Y} \), applying:
+\[
+y'_k =
+\begin{cases}
+\tau & \text{if } y_k = s, \\
+y_k & \text{otherwise.}
+\end{cases}
+\]
+The malicious client then trains locally and submits the resulting model \( m'_i \) to the server. Over time, the aggregation of poisoned updates subtly shifts the global model's decision boundaries toward the adversary's target class~\cite{cao2020fltrust}, \textcolor{blue}{relying solely on local label manipulation} without requiring server access or deviating from the standard FL protocol.
+
+\subsection{Threat Model Boundary and Adaptive Adversaries}
+\label{sec:threatext}
+\textcolor{blue}{Our primary threat model, consistent with the label-flipping literature~\cite{tolpegin2020data,jebreel2024lfighter}, restricts the adversary to local data manipulation: the attacker cannot tamper with model updates, the evaluation procedure, or server-side computation. This scoping is deliberate, as it isolates the specific and widely-studied threat of label corruption from the broader and largely orthogonal problem of Byzantine gradient manipulation, which is already addressed by a separate line of robust-aggregation work~\cite{yin2018byzantine,NIPS2017_f4b9ec30,mhamdi2018hidden}. We nonetheless discuss two natural extensions of the adversary's capabilities that a reviewer or practitioner may reasonably ask about.}
+
+\textcolor{blue}{\textit{Falsified accuracy reports.} A strictly stronger adversary could additionally misreport its local accuracy $acc_{ij}$ instead of, or in addition to, flipping labels, attempting to mimic $acc_{avg}$ and evade the trust penalty. This capability lies outside our stated threat model (Section~\ref{sec:problem Statement}), since it requires the attacker to tamper with the evaluation/reporting pipeline rather than only the local dataset. It is nonetheless a realistic concern in deployments without secure client attestation. A natural mitigation is for the server to occasionally issue a small \emph{challenge set}, a fixed, previously unseen mini-batch distributed identically to all active clients, and compare each client's self-reported accuracy against the trust-weighted aggregate behavior implied by the client's submitted model update on that same batch; a large mismatch between reported and re-derived accuracy is itself an anomaly signal. We view a full protocol and empirical evaluation of this extension, e.g., via lightweight zero-knowledge proofs of correct local evaluation~\cite{shen2024lfrppfl} or commit-then-reveal accuracy reporting, as important future work rather than a claim made by the present evaluation.}
+
+\textcolor{blue}{\textit{Adaptive and colluding label-flippers.} A more sophisticated adversary could perform a \emph{partial} flip (poisoning only a fraction of local labels) or coordinate with other malicious clients so that each individual client's accuracy deviation stays just inside the trust threshold $\tau_{\text{thresh}}$, trading detectability for reduced attack impact. Because the flag-counter mechanism (M4) already requires \emph{persistent}, multi-round deviation before exclusion, a partial-flip strategy that stays under $\tau_{\text{thresh}}$ correspondingly bounds the damage that client can inflict on the aggregate, an attacker who wants to remain undetected is, by construction of the trust update rule, also limited in how much it can corrupt $M_{i+1}$ per round. Formalizing this accuracy-impact trade-off, and empirically stress-testing partial-flip and colluding strategies explicitly designed to evade average-based detection, is an important direction we leave to future work (Section~\ref{sec:limitations}); our current Lemma-1/Lemma-2 analysis (Section~\ref{sec:securityanalysis}) assumes the constant, full-flip adversary evaluated in Section~\ref{sec:implement&eval}.}
+
+\subsection{Research Objectives}
+\textcolor{blue}{Existing defenses against label-flipping attacks either rely on centralized anomaly detection at the server, which is \textcolor{blue}{computationally expensive, unscalable, and burdensome for resource-constrained environments}, or require clients to share portions of their local data, \textcolor{blue}{contradicting the privacy-preserving principles of FL}.}
+%Existing defenses against label-flipping attacks often rely on centralized anomaly detection at the server, assuming full visibility into client behavior---assumptions that rarely hold in practice. This introduces \textcolor{blue}{performance bottlenecks, negatively affecting scalability and responsiveness}, creates a single point of failure, and contradicts FL's privacy-preserving principles.
+
+To address these challenges, our research pursues the following three core objectives: i) \textit{design a decentralized aggregation method} that accurately detects and mitigates label-flipping attacks; ii) \textit{maintain high model performance} and reduce aggregation time even in the presence of adversarial clients, ensuring both robustness and efficiency; and iii) \textit{shift the majority of computations to the client side} and rigorously analyze the trade-offs in system efficiency, scalability, and resilience under adversarial conditions. Together, these objectives aim to build a trustworthy federated learning framework that resists adversarial manipulation while preserving client privacy and enabling scalable deployment.
+
+
+\section{Related Work}
+\label{sec:relatedworks}
+
+\subsection{Label Flipping-Specific Defenses}
+Several approaches have tackled label-flipping attacks in federated learning. Tolpegin et al.~\cite{tolpegin2020data} demonstrated the feasibility of such attacks and proposed a Principal Component Analysis based mechanism to detect malicious clients, but their method lacks generalization guarantees and performs poorly in non-IID settings. Fung et al.~\cite{fung2020limitations} introduced FoolsGold, leveraging cosine similarity between gradient updates. While effective against sybil-style poisoning, it suffers from false positives in non-IID scenarios and incurs high computational cost. 
+
+Nguyen et al.~\cite{nguyen2022flame} proposed FLAME, combining HDBSCAN clustering, differential privacy, and noise addition. It preserves model utility but requires careful tuning and introduces substantial overhead. Jebreel et al.~\cite{jebreel2024lfighter} developed LFighter, reweighting client updates using feature-level centroid deviation. It improves robustness but its effectiveness declines with data heterogeneity.
+
+\textcolor{blue}{Two recent works directly target label-flipping in non-IID FL settings and warrant closer examination. Li et al.~\cite{li2023hscs} proposed an Honest Score Client Selection Scheme that evaluates clients against a clean server-held dataset. While effective in non-IID conditions, this approach requires the server to maintain labeled reference data, introducing a privacy concern as it  contradicts the core FL principle that raw and sensitive client data should remain local. Shen et al.~\cite{shen2024lfrppfl} introduced a privacy-preserving defense using cryptographic mechanisms. While offering stronger privacy guarantees, the method incurs significant computational overhead due to encryption and secure aggregation, raising scalability concerns for large client populations and resource-constrained edge devices. Notably, both works primarily validate their performance on simpler datasets such as MNIST, without demonstrating effectiveness on more complex datasets like CIFAR-10, raising concerns about generalizability. }
+
+\textcolor{blue}{More recent label-flipping-specific defenses have continued to explore client-side and behavior-based detection. Jiang et al.~\cite{jiang2023dataquality} proposed MCDFL, which recovers a latent feature-space distribution to estimate per-client data quality, requiring the server to train and maintain a generative estimator, in contrast to AntiFLipper's single scalar report. Ovi et al.~\cite{ovi2023confident} used prediction-confidence statistics to flag flipped-label contributions, while Li et al.~\cite{li2025flgt} (FLGT) and a concurrent dual-granularity distribution-alignment defense~\cite{fedalign2026} guide server-side trust using richer per-client statistics (confidence margins or VAE-derived feature/label distribution signatures) rather than a single accuracy scalar, trading AntiFLipper's minimal communication footprint for finer-grained but more expensive detection signals. Abroshan~\cite{abroshan2025aitoprotect} instead monitors global-model output behavior (prediction entropy, margins) in an attack-agnostic manner, complementary to AntiFLipper's client-reported evaluation. Relative to this recent line of work, AntiFLipper's distinguishing design choice remains that clients compute and report only a single scalar accuracy value, without exposing feature statistics, confidence vectors, or requiring a generative model at the server.}
+
+\textcolor{blue}{We note that the accuracy-deviation principle underlying AntiFLipper is conceptually related to prior trust- and validation-score-based defenses such as FLTrust~\cite{cao2020fltrust}, which bootstraps trust from a server-held root dataset, and general Byzantine-robust aggregation rules such as Multi-Krum~\cite{NIPS2017_f4b9ec30}, Bulyan~\cite{mhamdi2018hidden}, and the certified-robustness framework CRFL~\cite{xie2021crfl}, which operate directly on model updates rather than client-reported evaluation scalars. AntiFLipper's novelty relative to this broader family lies specifically in (i) requiring no server-held reference dataset (unlike FLTrust and HSCS~\cite{li2023hscs}), (ii) requiring no inspection of model updates or gradients (unlike Multi-Krum, Bulyan, FLAME, and CRFL), and (iii) transmitting a single scalar rather than a feature or confidence vector (unlike MCDFL~\cite{jiang2023dataquality} and FLGT~\cite{li2025flgt}). We have not empirically benchmarked against Bulyan, CRFL, or FLTrust in this version of the paper, as they target the broader Byzantine/backdoor threat model rather than label-flipping specifically and require additional experimentation; we discuss this scoping decision further in Section~\ref{sec:limitations}.}
+
+
+%\textcolor{blue}{Two recent works directly target label-flipping in non-IID FL settings and warrant closer examination. Li et al.~\cite{li2023hscs} proposed an Honest Score Client Selection Scheme that evaluates clients against a clean server-held dataset. While effective in non-IID conditions, this approach requires the server to maintain labeled reference data, which introduces a privacy concern: the reference dataset encodes sensitive distributional information and contradicts the data-minimization principle of FL---the server essentially holds data on behalf of users, violating a core FL premise. Moreover, evaluation is confined to MNIST, and performance on more complex datasets such as CIFAR-10 is not demonstrated, raising questions about generalizability. Shen et al.~\cite{shen2024lfrppfl} introduced a privacy-preserving defense against label-flipping on non-IID data via cryptographic mechanisms. While the privacy guarantees are stronger, the approach incurs significant computational overhead from encryption and secure aggregation protocols, raising scalability concerns for large client populations and resource-constrained edge devices---precisely the deployment scenarios where FL is most valuable. Neither work validates on complex datasets such as CIFAR-10. AntiFLipper avoids these limitations: it requires no server-side reference data, no cryptographic overhead, and demonstrates strong detection performance on both MNIST and CIFAR-10 under IID and non-IID settings.}
+
+% AntiFLipper avoids these limitations: it requires no server-side reference data, no cryptographic overhead, and demonstrates strong detection performance on both MNIST and CIFAR-10 under IID and non-IID settings.}
+
+\subsection{Native Federated Learning Defenses}
+
+While not specifically tailored to counter label-flipping attacks, several robust aggregation methods have been studied in this context. FedAvg\cite{fedavg-pmlr-v54-mcmahan17a}, the popular aggregation mechanism in federated learning, lacks robustness against adversarial updates and suffers significant accuracy degradation under targeted label-flipping. To improve resilience, Yin et al.~\cite{yin2018byzantine} introduced coordinate-wise Median and Trimmed Mean strategies, demonstrating moderate robustness in IID settings but degraded performance in non-IID scenarios. Multi-Krum~\cite{NIPS2017_f4b9ec30} uses distance-based filtering, assuming an IID setting and a known number of adversaries; its performance deteriorates with data heterogeneity and its quadratic complexity limits scalability.
+
+In contrast, our proposed method, AntiFLipper, is designed without relying on data distribution assumptions or prior adversary knowledge. It provides a principled aggregation framework that generalizes well across non-IID environments and varying model architectures. Notably, AntiFLipper significantly reduces computational overhead while maintaining high model accuracy across all evaluated scenarios, making it a practical and scalable solution for real-world federated learning applications where robustness and efficiency are critical.
+
+
+\section{Detailed Design}
+\label{sec:methodology}
+
+%\textcolor{blue}{AntiFLipper defends FL against label-flipping attacks through a lightweight, client-side accuracy evaluation mechanism. The core intuition is that a global model trained predominantly on honest data will yield notably lower accuracy when evaluated on a client's poisoned local data, since flipped label assignments conflict with the model's learned representations. The independent client-side mechanism deployed on each client evaluates the current global model using a subset of the client’s private data and reports only a scalar accuracy value to the server. No raw data or gradients are transmitted, thereby preserving privacy. The server uses these scalars to maintain a per-client trust score, progressively down-weighting and eventually excluding clients with persistently anomalous accuracy. The method does not require explicit knowledge of the data distribution, it relies on \emph{relative} performance deviations among clients, tolerating transient drops due to natural data heterogeneity while penalizing consistently anomalous behavior. Since attackers are restricted to label manipulation only, they cannot interfere with the local evaluation process, an attacker capable of manipulating model updates or the evaluation mechanism would instead be conducting model poisoning, which is a distinct and out-of-scope threat. This design deliberately avoids server-side model update inspection---the dominant overhead source in competing methods, keeping aggregation cost minimal and the framework scalable for resource-constrained edge and IoT deployments.}
+
+\textcolor{blue}{AntiFLipper defends federated learning against label-flipping attacks via a lightweight, client-side accuracy evaluation mechanism. The core intuition is that a global model trained mostly on honest data will exhibit markedly lower accuracy on a client's poisoned data because flipped labels conflict with the learned representations. The client side mechanism independently evaluates the current global model on a subset
+of the client's private data and reports only a scalar accuracy to the server, transmitting neither raw data nor gradients and thus preserving privacy. From these scalars, the server maintains a per-client trust score, progressively down-weighting and eventually excluding clients with persistently anomalous accuracy. The method requires no explicit knowledge of the data distribution, it relies on \emph{relative} performance deviations across clients, tolerating transient drops caused by natural data heterogeneity while penalizing consistently anomalous behaviour. Since attackers are restricted to label manipulation, they cannot affect the local evaluation process or any aspect beyond label corruption of training data. %Attacks involving modification of model updates or the evaluation mechanism correspond to model poisoning and are outside the considered threat model.
+By deliberately avoiding server-side model-update inspection, the dominant overhead in competing methods, the framework keeps aggregation lightweight and scalable for resource-constrained edge and IoT deployments.}
+
+The AntiFLipper framework integrates five interdependent modular components as shown in Figure~\ref{fig:sysArch}.
+\begin{figure}[tbh]
+  \centering
+  \includegraphics[height=0.75\columnwidth]{fig/sys_arc.pdf}
+  \caption{Workflow of the AntiFLipper Framework}
+  \label{fig:sysArch}
+\end{figure}
+Each module operates within the standard FL loop, enhancing robustness against label-flipping attacks without altering the fundamental decentralized \textcolor{blue}{execution model}.
+
+\subsection{M1: Local Evaluation Feedback Module}
+At the beginning of each communication round, the server distributes the global model $M_i$ to all participating clients not in the malicious list $\beta$ (Algorithm~1, lines 2--3). 
+Each client-side evaluation mechanism then evaluates $M_i$ on a subset of the client’s local training dataset $data_{ij}$, computing a local accuracy score $acc_{ij}$. \textcolor{blue}{Only this scalar is returned to the server, no raw data is transmitted.} Clients with poisoned data yield lower global model accuracy, as the model trained on honest data performs poorly on flipped labels, producing the detection signal. Following evaluation, each client performs local training (Algorithm~1, line~5) to generate model $m_{ij}$ and returns both the model and $acc_{ij}$ to the server.
+
+\subsection{M2: Trust Inference Module}
+Upon receiving the results, the server computes the average accuracy across all non-malicious clients (i.e., excluding clients identified as malicious up to the current round) (Algorithm~\ref{alg:malfilter}, line~1). The trust score $\tau_j$, initialized uniformly as $1/N$ where $N$ is the total number of clients, is then updated for each client $j$ based on the squared deviation from the computed average:
+$\tau_j \leftarrow \tau_j \pm \eta \cdot (acc_{avg} - acc_{ij})^2$.
+Here, \texttt{sqDeviation()} $= (acc_{ij}-acc_{avg})^2$; \texttt{penalizeTrust()} $= \tau_j - \eta \cdot d$; \texttt{rewardTrust()} $= \tau_j + \eta \cdot d$; and \texttt{normalizeTrust()} rescales trust into $[0,1]$ excluding malicious clients.
+The sign is negative if $acc_{ij} < acc_{avg}$ (lines 4--5) and positive otherwise (lines 6--7). This quadratic penalty function penalizes deviations from the average more strongly than a linear scheme, addressing the issue where small but persistent differences could accumulate disproportionately over multiple rounds under a linear penalty formulation.
+
+
+\IncMargin{1em}
+\setlength{\textfloatsep}{0pt}
+\begin{algorithm}[t]
+  \caption{\texttt{AntiFLipper()}}\label{alg:antiflipper}
+  \SetKwFunction{AntiFLipper}{AntiFLipper}
+  \SetKwInOut{Input}{Input}
+  \SetKwInOut{Output}{Output}
+  \Indm 
+    \Input{Number of clients $n$, client list $clients$, local datasets $data$, trust learning rate $\eta$, trust threshold $\tau_{\text{threshold}}$, flag threshold $cnt_{\text{max}}$}
+    \Output{Global model $M_{i+1}$, malicious clients list $\beta$}
+  \Indp
+  \BlankLine
+
+  $(M_0,\ \tau,\ cnt,\ \beta) \leftarrow \texttt{Initialize}()$\\
+
+  \For{$i \leftarrow 1$ \KwTo $totalRounds$}{
+        \texttt{DistributeModel}($M_{i}, clients,\ \beta$)\\
+    \ForEach{$j \in clients$ \textbf{and} $j \notin \beta$}{
+        $(m_{ij},\ acc_{ij}) \leftarrow \texttt{LocTrain}(M_i,\ j,\ data_{ij})$\\
+    }
+        $(\tau,\ cnt,\ \beta) \leftarrow \texttt{MalNodeFilter}(clients ,\ acc_{ij},\ \tau,\ cnt,\ \beta)$\\
+    $M_{i+1} \leftarrow \texttt{GlobModelAgg}(m,\ \tau,\ clients,\ \beta)$\\
+  }
+
+  \Return{$M_{i+1},\ \beta$}
+\end{algorithm}
+\DecMargin{1em}
+
+\subsection{M3: Behavior Profiling Module}
+The server analyzes accuracy and trust scores over multiple rounds to build a behavior profile per client via the flag counter $cnt_j$ (Algorithm~2, lines 8--11), tracking how many rounds a client's trust has fallen below threshold. \textcolor{blue}{AntiFLipper makes no assumptions about data distribution or non-IID structure and uses relative performance deviations across clients for detection. It tolerates occasional accuracy drops from natural heterogeneity, penalizing only persistent anomalies, enabling robust detection without distribution-aware mechanisms.}
+
+\textcolor{blue}{When malicious clients are few or their influence is negligible, they may not be immediately flagged, as their impact is insufficient to degrade the global model. Since the objective is to prevent meaningful model corruption, such low-impact cases are not critical to the defense goal.}
+
+\subsection{M4: Anomaly-Guided Filtering Module}
+To avoid overreacting to transient accuracy drops, each client's flag counter $cnt_j$ tracks underperformance rounds. A client with trust score $\tau_j$ below $\tau_{\text{thresh}} = \frac{1}{kN}$ (a scalar threshold inversely proportional to $N$, the total number of initial clients, and adjustable via $k$ to control detection speed) is flagged (Algorithm \ref{alg:malfilter}, lines 8--9). After $cnt_{\text{max}}$ flags, a client is deemed malicious and added to list $\beta$ (lines 10--11). \textcolor{black}{Flagged clients ($\tau_j < \tau_{\text{thresh}}$) have their updates excluded from the next round's aggregation to prevent model contamination.} Malicious clients are excluded from participation in future rounds. Trust values are normalized to $[0, 1]$ (line 12). This balances tolerance for noisy data with protection against adversarial behavior.
+
+\IncMargin{1em}
+\setlength{\textfloatsep}{0pt}
+\begin{algorithm}[t]
+  \caption{\texttt{MalNodeFilter()}}\label{alg:malfilter}
+  \SetKwFunction{MalNodeFilter}{MalNodeFilter}
+  \SetKwInOut{Input}{Input}
+  \SetKwInOut{Output}{Output}
+  \Indm 
+    \Input{Clients $clients$, Accuracies $acc_{ij}$, Trust values $\tau$, Flags $cnt$, Malicious list $\beta$}
+    \Output{Updated $\tau$, $cnt$, $\beta$}
+  \Indp
+  \BlankLine
+  
+  $acc_{avg} \leftarrow \texttt{getAvgAccuracy}(clients \setminus \beta)$\\
+  
+  \ForEach{$j \in clients$ \textbf{and} $j \notin \beta$}{
+    
+      $d \leftarrow \texttt{sqDeviation}(acc_{ij}, acc_{avg})$\\
+      \If{$acc_{ij} < acc_{avg}$}{
+        $\tau_j \leftarrow \texttt{penalizeTrust}(\tau_j, d, \eta)$\\
+      }
+      \Else{
+        $\tau_j \leftarrow \texttt{rewardTrust}(\tau_j, d, \eta)$\\
+      }
+
+      \If{$\tau_j \le \tau_{\text{thresh}}$}{
+        $cnt_j \leftarrow cnt_j + 1$\\
+        \If{$cnt_j \ge cnt_{\text{max}}$}{
+          add $j$ to $\beta$\\
+        }
+      }
+  }
+
+  
+      
+    
+  
+  $\tau \leftarrow \texttt{normalizeTrust}(\tau, \beta)$\\
+
+  \Return{$\tau$, $cnt$, $\beta$}
+\end{algorithm}
+\DecMargin{1em}
+The overall malicious node filtering process is implemented in Algorithm 2, which is invoked from the main AntiFLipper algorithm (Algorithm 1, line 6) during each communication round, before global model aggregation.
+
+
+ \subsection{M5: Weighted Aggregation Module}
+After malicious clients have been filtered out, the remaining client models are aggregated using a weighted average (Algorithm 1, line 7). The weight assigned to each client's model is proportional to its normalized trust score. Formally, the aggregated model $M_{i+1}$ is computed as: \(
+M_{i+1} = \sum_{j \in \text{Honest}} \frac{\tau_j}{W} \cdot m_{ij} \), where $W = \sum_{j \in \text{Honest}} \tau_j$. This ensures that reliable clients have a greater impact on the evolution of the global model, reinforcing the positive feedback loop while suppressing the influence of detected advisories.
+
+\section{Implementation and Evaluation}
+\label{sec:implement&eval}
+
+We developed AntiFLipper\footnote{The source code is available at: \url{https://github.com/abidh8820/AntiFlipper}} in Python and evaluated it under label-flipping attacks against established defenses, including FedAvg~\cite{fedavg-pmlr-v54-mcmahan17a}, Median, Trimmed Mean~\cite{yin2018byzantine}, FoolsGold~\cite{fung2020limitations}, Tolpegin~\cite{tolpegin2020data}, MKRUM~\cite{NIPS2017_f4b9ec30}, FLAME~\cite{nguyen2022flame}, and LFighter~\cite{jebreel2024lfighter}. Experiments were implemented in PyTorch on a 12th Gen Intel Core i9-12900K CPU, 128GB RAM, and NVIDIA RTX 3090 GPU running Ubuntu 22.04.4 LTS. We evaluated on two benchmark datasets: MNIST70K~\cite{MNIST-lecun1998gradient}, comprising 70,000 grayscale digit images (60K train, 10K test), and CIFAR-10~\cite{CIFAR-krizhevsky2009learning}, containing 60,000 color images across 10 classes (50K train, 10K test). MNIST models use a two-layer CNN followed by two fully connected layers, while CIFAR-10 models are based on ResNet18~\cite{resnet-he2016deep} and ShuffleNetV2~\cite{shufflenetV2-ma2018shufflenet}, each ending with a single fully connected layer.
+
+Experiments were conducted under both IID and non-IID settings. For MNIST, we simulated 100 clients, all active every round, under an IID random-uniform split and, separately, under Dirichlet~\cite{ferguson1973bayesian} non-IID partitioning ($\alpha=1$), running for 200 communication rounds with 3 local epochs, batch size 64, and SGD (lr=0.001, momentum=0.9). For CIFAR-10, we used 100 clients (20 active per round) under IID and 20 clients (all active per round) under non-IID ($\alpha=1$), trained over 100 rounds with 3 local epochs, batch size 32, and SGD (lr=0.01, momentum=0.9). \textcolor{red}{[AUTHOR TO CONFIRM: the smaller CIFAR-10 non-IID client pool was chosen to keep the number of samples per client, and hence the per-client Dirichlet partition, large enough to be meaningful for ResNet18/ShuffleNetV2 training under $\alpha=1$; please confirm or replace this rationale with the actual reason, and consider adding a matched 100-client non-IID run if feasible, to make the CIFAR-10 IID/non-IID comparison directly comparable, as reviewers requested.]} All settings assume 40\% malicious clients, the theoretical upper bound for MKRUM~\cite{NIPS2017_f4b9ec30} performing constant label-flipping attacks. The trust update rule (Section~\ref{sec:methodology}, M2) used learning rate $\eta = \textcolor{red}{[VALUE]}$, trust threshold scale $k = \textcolor{red}{[VALUE]}$ (i.e., $\tau_{\text{thresh}} = 1/(kN)$), and flag threshold $cnt_{\max} = \textcolor{red}{[VALUE]}$ rounds; \textcolor{red}{[AUTHOR TO INSERT: the actual values used to produce Table~\ref{table:result_table}, and, if available even a coarse sensitivity sweep over one or two of these, e.g., $\eta \in \{0.05, 0.1, 0.2\}$, as several reviewers specifically requested these settings and a sensitivity discussion.]}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=1\linewidth]{fig/antiflipper_combined_subplots_trust_updated.pdf}
+    \caption{Average Client Trust Over First 25 Rounds}
+    \label{fig:Average Client Trust Over First 25 Rounds}
+\end{figure}
+
+\begin{table*}[tbh!] 
+\centering 
+\caption{\small Comparison of Different Methods on MNIST and CIFAR-10 (IID and Non-IID)} 
+\renewcommand{\arraystretch}{1.2}
+\scriptsize
+\begin{tabular}{|c||p{3cm}||p{1.2cm}|p{1cm}|p{1cm}|p{1cm}|p{1cm}|p{1cm}|p{1cm}|p{1cm}|p{1.2cm}|} 
+\hline
+& \textbf{Methods} & \textbf{FoolsGold} & \textbf{FedAvg} & \textbf{Median} & \textbf{TMean} & \textbf{FLAME} & \textbf{MKRUM} & \textbf{LFighter} & \textbf{Tolpegin} & \textbf{AntiFLipper} \\
+\cline{2-11} 
+\hline\hline
+
+\multirow{3}{*}{\rotatebox[origin=c]{90}{\shortstack{\textbf{MNIST} \\ \textbf{(IID)}}}} 
+& \textbf{Global Accuracy (\%)}   & 0.36  & 51.85 & 96.10 & 96.18 & 97.44 & 97.45 & 97.45  & 97.45  & 97.06  \\ 
+\cline{2-11}
+& \textbf{Test Error}             & 17.60 & 0.86  & 0.18  & 0.18  & 0.09  & 0.09  & 0.09   & 0.09   & 0.10   \\ 
+\cline{2-11}
+& \textbf{Aggregation Time (ms)} & 9.36  & 4.61  & 12.03 & 12.86 & 45.61 & 15.55 & 119.65 & 160.94 & 3.01   \\ 
+\hline\hline
+
+\multirow{3}{*}{\rotatebox[origin=c]{90}{\shortstack{\textbf{MNIST} \\ \textbf{(NON-} \\ \textbf{IID)} }}} 
+& \textbf{Global Accuracy (\%)}   & 3.58  & 53.99 & 95.67 & 95.61 & 97.03 & 96.74 & 96.76  & 96.80  & 96.77  \\ 
+\cline{2-11}
+& \textbf{Test Error}             & 6.72  & 0.76  & 0.22  & 0.23  & 0.11  & 0.12  & 0.13   & 0.13   & 0.11   \\ 
+\cline{2-11}
+& \textbf{Aggregation Time (ms)} & 8.65  & 4.44  & 13.09 & 11.73 & 45.66 & 13.70 & 119.37 & 168.88 & 2.96   \\ 
+\hline\hline
+
+\multirow{3}{*}{\rotatebox[origin=c]{90}{\shortstack{\textbf{CIFAR} \\ \textbf{(IID)}}}} 
+& \textbf{Global Accuracy (\%)}   & 70.13 & 47.21 & 63.90 & 63.77 & 67.30 & 32.86 & 69.96  & 70.28  & 70.09  \\ 
+\cline{2-11}
+& \textbf{Test Error}             & 1.10  & 1.43  & 1.10  & 1.12  & 1.15  & 2.31  & 1.12   & 1.11   & 1.10   \\ 
+\cline{2-11}
+& \textbf{Aggregation Time (ms)} & 53.87 & 50.76 & 660.39 & 641.66 & 1489.91 & 686.93 & 468.02 & 354.96 & 48.01 \\ 
+\hline\hline
+
+\multirow{3}{*}{\rotatebox[origin=c]{90}{\shortstack{\textbf{CIFAR} \\ \textbf{(NON-} \\ \textbf{IID)} }}} 
+& \textbf{Global Accuracy (\%)}   & 56.01 & 50.95 & 60.93 & 59.66 & 37.77 & 44.08 & 64.58  & 53.58  & 68.23  \\ 
+\cline{2-11}
+& \textbf{Test Error}             & 1.12  & 1.31  & 1.18  & 1.19  & 3.23  & 1.70  & 1.21   & 1.31   & 1.14   \\ 
+\cline{2-11}
+& \textbf{Aggregation Time (ms)} & 53.16 & 49.75 & 712.13 & 678.38 & 1334.06 & 727.38 & 449.12 & 339.47 & 48.43 \\ 
+\hline\hline
+\end{tabular} 
+\label{table:result_table} 
+\end{table*}
+
+\subsection{Evaluation Metrics}
+We evaluated using three metrics: Overall Accuracy (All-Acc), Test Error (TE), and Aggregation Time. All-Acc measures prediction correctness; TE (from cross-entropy loss) reflects robustness against label-flipping; Aggregation Time measures server-side efficiency, essential for scalability.
+
+\subsection{Malicious Node Detection}
+AntiFLipper distinguishes malicious from honest clients using the global model's accuracy on local datasets. When a client flips labels, its local accuracy drops because the global model, trained on honest data, performs poorly on manipulated data. Malicious accuracy declines rapidly, near zero early on MNIST and within 20 rounds on CIFAR, while honest nodes maintain high accuracy. Figure~\ref{fig:Average Client Trust Over First 25 Rounds} shows trust scores diverging clearly between honest and malicious clients within a few rounds.
+
+\subsection{Experimental Results}
+
+On MNIST (Table~\ref{table:result_table}), AntiFLipper, LFighter, Tolpegin, MKRUM, FLAME, TMean, and Median all achieved high accuracy. FoolsGold collapsed in non-IID settings (3.58\%), misidentifying heterogeneous honest gradients as sybils. FedAvg amplified poisoned updates. AntiFLipper matched top defenses in accuracy while achieving the lowest aggregation time (3.01\,ms IID; 2.96\,ms non-IID) ,  53 times faster than LFighter and 15 times faster than FLAME. \textcolor{blue}{AntiFLipper's aggregation time (3.01\,ms) is also marginally lower than the undefended FedAvg baseline (4.61\,ms) despite performing conceptually more work (a trust-weighted sum versus a uniform average). We attribute this to implementation-level rather than algorithmic factors: our FedAvg baseline recomputes uniform weights and iterates over the full client list, including clients on the malicious list $\beta$, on every round, whereas AntiFLipper's aggregation loop (Algorithm~1, line~7) iterates only over the already-filtered honest subset $C \setminus \beta$, which shrinks over rounds as malicious clients are excluded. At the millisecond scale reported here, both figures are also within the range of ordinary system timing jitter (CPU scheduling, memory allocation), so this difference should be read as ``AntiFLipper's overhead relative to uniform averaging is negligible'' rather than as evidence that trust-weighting is algorithmically faster than averaging; the meaningful comparison is against the two to three orders of magnitude slower FLAME and LFighter.}
+
+On CIFAR-10, results followed similar trends with generally lower accuracy due to complexity. In IID, AntiFLipper (70.09\%) matched LFighter, Tolpegin, and FoolsGold in terms of accuracy at the lowest aggregation time (48\,ms vs.\ 1490\,ms for FLAME). In non-IID, AntiFLipper led in both accuracy (68.23\%) and efficiency, outperforming all methods including LFighter (64.58\%) and Tolpegin (53.58\%). \textcolor{blue}{These CIFAR-10 non-IID results are particularly significant as they confirm that AntiFLipper's relative-deviation approach generalizes to complex datasets and heterogeneous distributions without requiring distribution-specific assumptions or server-side reference data, in contrast to methods such as~\cite{li2023hscs,shen2024lfrppfl} that were only validated on MNIST.}
+
+We further tested AntiFLipper under dynamic attack scenarios: (1) attacks starting after $n/2$ rounds (with $n$ the total rounds), and (2) poisoning every $n$ rounds ($n=15$). As shown in Table~\ref{table:dynamic_table}, AntiFLipper maintained accuracies within $\pm0.5\%$ of baseline and detected all malicious nodes. Delayed or intermittent attacks were easier to detect, as the model, already dominated by benign updates, remained stable and deviations were more apparent. In both cases, AntiFLipper remained robust, efficient, and incurred similar aggregation time as before.
+
+\begin{table}[h]
+\centering
+\caption{Global test accuracies (\%) under dynamic attack scenarios}
+\label{table:dynamic_table}
+\begin{tabular}{|l||c|c|c|c|}
+\hline
+\textbf{Scenario} & \multicolumn{2}{c|}{\textbf{MNIST}} & \multicolumn{2}{c|}{\textbf{CIFAR-10}} \\
+\cline{2-5}
+ & \textbf{IID} & \textbf{Non-IID} & \textbf{IID} & \textbf{Non-IID} \\
+\hline \hline
+Scenario 1 & 96.93 & 97.03 & 72.66 & 70.62 \\ \hline
+Scenario 2 & 96.68 & 96.82 & 72.59 & 70.59 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\linewidth]{fig/accuracy_time_tradeoff.pdf}
+    \caption{\textcolor{blue}{Accuracy vs.\ aggregation-time trade-off across all nine methods and four dataset/distribution settings (data as reported in Table~\ref{table:result_table}; note the log-scaled time axis). AntiFLipper (star) consistently occupies the upper-left region, matching the accuracy of the best-performing baselines while incurring the lowest aggregation time in every setting.}}
+    \label{fig:tradeoff}
+\end{figure}
+
+\textcolor{blue}{Figure~\ref{fig:tradeoff} restates the results of Table~\ref{table:result_table} as an accuracy-versus-aggregation-time trade-off, which makes the practical value of AntiFLipper's design more directly visible than the raw table: across all four dataset/distribution settings, AntiFLipper sits in the upper-left region (high accuracy, low time), whereas the next most accurate defenses (LFighter, FLAME, Tolpegin) are shifted one to two orders of magnitude to the right on the log-scaled time axis.}
+
+\noindent In summary, AntiFLipper delivers robust, efficient, and scalable defense across datasets, distributions, and dynamic attack conditions.
+
+
+\section{Security Analysis}
+\label{sec:securityanalysis}
+
+In this section, we formalize AntiFLipper’s trust-based defense against label-flipping attacks. Our approach quantifies deviations in local model accuracy to adjust client trust scores, enabling the system to progressively isolate and exclude malicious participants. This establishes AntiFLipper as an efficient and robust defense for secure federated learning in adversarial federated learning environments.
+
+\subsection{Accuracy-Based Detection of Label Flipping Behavior} A key challenge in federated learning is mitigating label-flipping attacks, where malicious clients poison training by mislabeling data. AntiFLipper tackles this by exploiting the accuracy drop observed when the global model is trained on such poisoned data.
+
+\textit{\textbf{Lemma-1}: In AntiFLipper, if a client \( c_i \) flips labels in its local dataset \( d_i \), converting it into a poisoned distribution \( d_i' \), then the global model \( M \) yields lower accuracy on \( d_i' \) than on honest data, exposing adversarial behavior.} \\
+
+\textit{\textbf{Proof:}} Let \( C = \{c_1, c_2, \ldots, c_n\} \) be the set of clients participating in federated learning, and let \( M \) be the global model aggregated from local models of the majority of honest clients. If a client \( c_i \in C \) performs label-flipping, its local data distribution becomes \( d_i' \), which diverges from the honest distributions \( d_j \), where \( j \neq i \). The global model \( M \) minimizes loss over honest client distributions \( d_j \), so when evaluated on a flipped distribution \( d_i' \), it incurs higher loss: \(L(M, d_i') > L(M, d_j).\) Since accuracy decreases as loss increases, this implies: \(\text{acc}(M, d_i') < \text{acc}(M, d_j).\) To detect deviation, AntiFLipper compares each client’s accuracy to the average \( \text{acc}_{\text{avg}} \). For a malicious client \( c_i \), \( \text{acc}_{\text{avg}} - \text{acc}(M, d_i') > \text{acc}_{\text{avg}} - \text{acc}(M, d_j) \), and squaring amplifies this gap: \( \Delta_i = (\text{acc}_{\text{avg}} - \text{acc}(M, d_i'))^2 \). This deviation is used to reduce the client's trust score, allowing the system to gradually identify and isolate clients that consistently behave maliciously.
+\textcolor{blue}{Transient non-IID deviations are handled by the flag-counter mechanism (M4), which requires persistent low trust before exclusion, preventing removal of honest clients with skewed data.}
+
+\subsection{Trust Score Convergence for Malicious Exclusion}
+\textit{\textbf{Lemma-2}: In AntiFLipper, a client \( c_i \) is considered malicious and excluded from training if its trust score satisfies \( \tau_i < \tau_{\text{threshold}} \) for more than \( x \)  rounds, indicating consistent behavior associated with label-flipping attacks.} \\
+
+\textit{\textbf{Proof:}} Each client \( c_i \in C \) starts with a trust value \( \tau_i = \frac{1}{n} \), ensuring \( \sum_{i=1}^n \tau_i = 1 \). These values are used to weight local models in global aggregation as  \(M \gets M + w_i \cdot m_i, \quad \text{where} \quad w_i = \frac{\tau_i}{W}, \quad W = \sum \tau_i = 1.\) After each round, trust is updated based on the squared deviation from the average accuracy: \(
+\tau_i \gets \tau_i \pm \eta \cdot (\text{acc}_i - \text{acc}_{\text{avg}})^2, \)
+and then normalized to maintain \( \sum \tau_i = 1 \). Since trust updates are applied independently per client, individual scores fluctuate while the total remains constant. A client is flagged if \( \tau_i < \tau_{\text{threshold}} = {1} / {kn} \), where \( k > 1 \), indicating its influence has dropped by a factor of \( k \). Given \( \tau_i \ll \tau_{\text{avg}} = {1} / {n} \), its contribution becomes negligible. If this persists for \( x \)  rounds, the client is considered malicious and excluded from further training.
+
+\subsection{Dependence on the Malicious Client Ratio}
+\label{sec:ratioanalysis}
+\textcolor{blue}{Lemma-1's guarantee that $\text{acc}(M, d_i') < \text{acc}(M, d_j)$ rests on the assumption that $M$ is aggregated predominantly from honest updates, so that $M$'s decision boundaries reflect the honest label distribution rather than the flipped one. Let $p \in [0,1]$ denote the fraction of participating clients that are malicious in a given round, and let $\text{acc}_H$ and $\text{acc}_{M'}$ denote the global model's expected accuracy on honest and flipped data, respectively, before any exclusion. Because $\text{acc}_{avg}$ is itself a weighted mixture of both populations, $\text{acc}_{avg} \approx (1-p)\cdot \text{acc}_H + p \cdot \text{acc}_{M'}$, so the detectable gap for a malicious client shrinks as
+\[
+\text{acc}_{avg} - \text{acc}_{M'} \;\approx\; (1-p)\,(\text{acc}_H - \text{acc}_{M'}),
+\]
+which is monotonically decreasing in $p$ and vanishes as $p \to 1$. In the limit where malicious clients form a majority ($p > 0.5$), $M$ itself is increasingly shaped by poisoned updates each round, so $\text{acc}_H - \text{acc}_{M'}$ collapses and the accuracy-deviation signal that Lemma-1 relies on degrades along with it, a fundamental limitation shared by any detector that infers trust purely from relative deviation rather than absolute, distribution-independent ground truth. This is consistent with why our experiments, and the broader label-flipping literature~\cite{tolpegin2020data,jebreel2024lfighter}, evaluate at a fixed 40\% malicious ratio, the standard worst case tolerated by comparably-scoped defenses such as Multi-Krum~\cite{NIPS2017_f4b9ec30}, rather than the majority-adversary regime, which is generally considered out of scope for detection-based (as opposed to certified-robust) defenses. We have not empirically swept $p$ across the full $[0,1]$ range in this version of the paper; Section~\ref{sec:limitations} discusses this as a direction for follow-up work, including deriving the precise threshold $p^*$ at which detection accuracy degrades below a target recall.}
+
+\subsection{Robustness to Non-IID Skew and Adaptive Adversaries}
+\textcolor{blue}{The flag-counter mechanism (M4) is the primary safeguard against penalizing honest clients whose accuracy is transiently low due to non-IID skew rather than malicious behavior: a single low-accuracy round only increments $cnt_j$, and exclusion requires $cnt_{\max}$ \emph{consecutive} (or cumulative, depending on configuration) violations. This tolerates the natural round-to-round accuracy fluctuation that heterogeneous partitions produce. However, as Section~\ref{sec:threatext} notes, an honest client whose local distribution is persistently and severely skewed, rather than merely transiently divergent, could in principle be misclassified if its accuracy stays below $\tau_{\text{thresh}}$ for $cnt_{\max}$ rounds purely due to heterogeneity rather than poisoning. Our current experiments use a single, moderate heterogeneity setting (Dirichlet $\alpha=1$); we have not stress-tested this false-positive failure mode under more extreme skew (e.g., $\alpha=0.1$), and we report this explicitly as a limitation in Section~\ref{sec:limitations} rather than claiming coverage we have not evaluated.}
+
+\subsection{Privacy Considerations of Accuracy Reporting}
+\textcolor{blue}{While AntiFLipper avoids transmitting raw data or gradients, the scalar $acc_{ij}$ is not information-free: repeated accuracy reports across rounds implicitly reveal how well the evolving global model fits a client's local distribution, which could in principle support membership-inference-style reasoning about a client's data composition, particularly for clients with small or highly unique local datasets. This risk is qualitatively smaller than gradient- or update-based leakage (the object exploited by classical FL membership-inference attacks), since a single scalar carries far less information than a full model update, but it is not zero. A standard mitigation would be to inject calibrated noise into $acc_{ij}$ before transmission, e.g., via a Laplace or Gaussian mechanism sized to a target $(\epsilon,\delta)$-differential-privacy budget, analogous to the noise-addition step used by FLAME~\cite{nguyen2022flame} for its clustering inputs. Because the trust update (Section~\ref{sec:methodology}, M2) already operates on a \emph{squared deviation} from a population average rather than the raw value, we expect it to be reasonably tolerant of small additive noise, but quantifying the resulting privacy-utility trade-off (i.e., how much noise the detector can absorb before its recall degrades) requires a dedicated empirical study that we leave to future work rather than claim here.}
+
+\subsection{Convergence Under Progressive Client Exclusion}
+\textcolor{blue}{A natural concern is whether progressively excluding clients (M4) and re-weighting the remainder (M5) preserves the convergence behavior of the underlying federated averaging procedure. Since $M5$ performs a convex combination of surviving client models with weights $w_j = \tau_j / W$ summing to one, each round of AntiFLipper is structurally a weighted instance of FedAvg restricted to the current honest set $C \setminus \beta$. Existing convergence analyses of weighted FedAvg under bounded client heterogeneity~\cite{li2020convergence} therefore apply directly to any \emph{fixed} client set, and because $\beta$ is monotonically non-decreasing and, by Lemma-2, only clients whose behavior is persistently and predominantly malicious are added to $\beta$, the honest sub-population's data heterogeneity bound is not made worse by exclusion. This gives an informal argument that AntiFLipper inherits the convergence guarantees of weighted FedAvg on the (shrinking) honest client set, modulo the standard caveat that these guarantees assume bounded gradient dissimilarity across the surviving honest clients. We view a formal, non-asymptotic convergence proof that explicitly accounts for the round-varying client set $C \setminus \beta_i$ as valuable future work; our empirical results (Table~\ref{table:result_table}, Table~\ref{table:dynamic_table}) provide supporting evidence of stable convergence but do not constitute a proof.}
+
+
+\section{Computational and Communication Overhead of AntiFLipper}
+\label{sec:overhead}
+
+To quantify the computational overhead introduced by local evaluation in {AntiFLipper}, we consider a neural network model $f(x; w)$ with $W$ parameters, trained on each client $k$ with dataset $D_k$ of $n_k$ samples. Clients perform $E$ local SGD epochs (batch size $B$), where the per-sample forward and backward pass costs are $C_f$ and $C_b \approx 2C_f$, respectively. Thus, the training cost per client per round is $C_{\text{train}} \approx 3E \cdot n_k \cdot C_f$.
+
+Local evaluation on a fraction $\gamma$ of the data adds $C_{\text{eval}} = \gamma \cdot n_k \cdot C_f$, leading to a total cost of $C_{\text{total}} = n_k \cdot (3E + \gamma) \cdot C_f$, and relative overhead $\frac{\gamma}{3E}$. In our experiments with $E = 3$, full evaluation ($\gamma = 1$) yields a worst-case overhead of ~11.1\%. The global accuracies reported in Table~\ref{table:result_table} correspond to this full local data evaluation setting.
+
+To reduce cost, we performed evaluation on only 10\% of local data ($\gamma = 0.1$), resulting in just 1.1\% overhead. Despite this, the system achieves strong performance: $97.11\%$ (MNIST IID), $96.79\%$ (MNIST Non-IID), $74.81\%$ (CIFAR-10 IID), and $68.18\%$ (CIFAR-10 Non-IID), with early malicious client detection, no increase in aggregation time, and no noticeable drop in accuracy—sometimes even slight improvements. 
+
+\textcolor{blue}{AntiFLipper avoids server-side inspection of updates, eliminating the main overhead in competing methods. Instead of FLAME-style aggregation, it shifts evaluation to clients in parallel, keeping aggregation lightweight and scalable. The parameter $\gamma$ provides a flexible trade-off between efficiency and detection sensitivity.}
+
+\subsection{Communication Overhead}
+\textcolor{blue}{Beyond computation, we analyze communication cost, which was not previously discussed. In each round, every participating client downloads the global model ($W$ parameters) and uploads its locally trained model update (also $W$ parameters), exactly as in vanilla FedAvg~\cite{fedavg-pmlr-v54-mcmahan17a}; AntiFLipper adds only the scalar $acc_{ij}$ (a single 32-bit float, 4 bytes) to the upload. For a model with $W$ parameters transmitted at 32-bit precision, the relative communication overhead is $4/(4W) = 1/W$, i.e., asymptotically negligible for any model beyond a few parameters (e.g., $<0.001\%$ for a CNN with $W \approx 4\times 10^5$ parameters, as used for MNIST). This is in sharp contrast to methods that require additional communication rounds or payload expansion: cryptographic defenses such as Shen et al.~\cite{shen2024lfrppfl} transmit homomorphically encrypted updates, which typically expand payload size by one to two orders of magnitude, and server-reference-based methods such as FLTrust~\cite{cao2020fltrust} and HSCS~\cite{li2023hscs} require the server (not clients) to additionally hold and periodically refresh a labeled reference dataset. FLAME~\cite{nguyen2022flame} and clustering-based defenses do not add client-side communication either, but their overhead, as quantified in Table~\ref{table:result_table}, is concentrated in server-side computation over the received updates rather than in the wire cost, which is precisely the overhead AntiFLipper is designed to avoid.}
+
+
+\section{Limitations and Threats to Validity}
+\label{sec:limitations}
+\textcolor{blue}{We deliberately scope this paper to a computationally efficient, client-side detection mechanism for the specific and widely-studied label-flipping threat model, evaluated with no additional experimentation beyond what was already run for the original submission. In the interest of transparency, we summarize here the evaluation gaps identified during review that would require new experiments to close, rather than overstating the paper's current coverage:}
+
+\begin{itemize}
+    \item \textcolor{blue}{\textbf{Statistical significance.} All reported accuracies and aggregation times (Table~\ref{table:result_table}, Table~\ref{table:dynamic_table}) come from single runs rather than an average over multiple random seeds, so we cannot currently report standard deviations or confidence intervals, or certify that the small accuracy gaps between AntiFLipper and the closest baselines (e.g., LFighter, Tolpegin) are statistically significant rather than run-to-run noise.}
+    \item \textcolor{blue}{\textbf{Malicious ratio sweep.} Consistent with Section~\ref{sec:ratioanalysis}, all results use a fixed 40\% malicious client ratio; we have not empirically swept lower or higher ratios (e.g., 10--50\%) to trace the detection-performance curve or empirically locate the failure threshold $p^*$.}
+    \item \textcolor{blue}{\textbf{Heterogeneity range.} All non-IID results use a single, moderate Dirichlet setting ($\alpha=1$); more extreme heterogeneity (e.g., $\alpha=0.1$) is not evaluated, so the false-positive risk discussed in Section~\ref{sec:securityanalysis} for severely skewed honest clients is not empirically bounded.}
+    \item \textcolor{blue}{\textbf{Baseline scope.} Our empirical comparison targets defenses specifically designed for, or commonly benchmarked against, label-flipping (FoolsGold, FLAME, LFighter, Tolpegin) plus foundational robust-aggregation baselines (Median, Trimmed Mean, Multi-Krum). We have not benchmarked against Bulyan~\cite{mhamdi2018hidden}, CRFL~\cite{xie2021crfl}, or FLTrust~\cite{cao2020fltrust}, which target a broader Byzantine/backdoor threat model; a fair comparison would require re-tuning these methods for the label-flipping setting and is left to future work.}
+    \item \textcolor{blue}{\textbf{Domain and architecture coverage.} Evaluation is restricted to two image-classification benchmarks (MNIST, CIFAR-10) with CNN/ResNet/ShuffleNet architectures. Tabular, time-series, and NLP workloads, which are also relevant to the IoT and edge scenarios this paper motivates, are not evaluated.}
+    \item \textcolor{blue}{\textbf{Hyperparameter sensitivity.} We report the trust threshold scale $k$, flag threshold $cnt_{\max}$, trust learning rate $\eta$, and evaluation fraction $\gamma$ as tunable parameters (Section~\ref{sec:methodology}), and provide an analytical trade-off for $\gamma$ (Section~\ref{sec:overhead}), but have not run a controlled sensitivity sweep over $k$, $cnt_{\max}$, and $\eta$.}
+    \item \textcolor{blue}{\textbf{Deployment realism.} All experiments assume synchronous, fully reliable client participation each round. Client dropout, stragglers, communication failures, and partial-participation schedules, all common in real IoT/edge deployments, are not modeled.}
+    \item \textcolor{blue}{\textbf{Resource-constrained hardware.} Our overhead analysis (Section~\ref{sec:overhead}) is analytical and our timing measurements (Table~\ref{table:result_table}) were collected on a workstation-class GPU server; we have not measured memory, energy, or latency on representative constrained edge/IoT hardware (e.g., Raspberry Pi- or microcontroller-class devices), so the suitability claims for such deployments should be read as motivated by the analytical overhead formula rather than validated on-device.}
+\end{itemize}
+
+\textcolor{blue}{We view each of these as a well-defined, tractable follow-up rather than a fundamental obstacle to the approach, and we have restructured Sections~\ref{sec:threatext} and~\ref{sec:securityanalysis} in this revision to analytically characterize several of these gaps (the malicious-ratio threshold, adaptive/colluding adversaries, and privacy leakage) even where we could not close them empirically without new experimentation.}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this paper, we introduced AntiFLipper, a lightweight and effective defense mechanism for detecting and mitigating label-flipping attacks in federated learning. Unlike existing methods that trade off security for efficiency, AntiFLipper achieves a strong balance between both. Through extensive evaluations on IID and non-IID data distributions across two benchmark datasets, we show that AntiFLipper consistently matches or exceeds the accuracy of state-of-the-art defenses. Remarkably, it achieves significantly lower aggregation time—even outperforming the baseline FedAvg in some cases. This optimal trade-off makes AntiFLipper particularly suitable for real-world FL deployments in privacy-sensitive, time-constrained \textcolor{blue}{edge and IoT network} environments where both security and efficiency are non-negotiable.
+
+
+\bibliographystyle{IEEEtran}
+\bibliography{IEEEabrv,bibliography}
+\end{document}
