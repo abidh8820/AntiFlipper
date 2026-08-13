@@ -138,7 +138,7 @@ def package(manifest_path: Path) -> Path:
                 archive.write(path, path.relative_to(ROOT))
         for path in (ROOT / "antiflipper_exp").rglob("*.py"):
             archive.write(path, path.relative_to(ROOT))
-        for name in ("README.md", "EXPERIMENTS.md", "requirements.txt", "run_all.cmd", "run_all.ps1", "cli.py", "self_test.py"):
+        for name in ("README.md", "RUN_INSTRUCTIONS.md", "EXPERIMENTS.md", "requirements.txt", "run_all.cmd", "run_all.ps1", "cli.py", "self_test.py"):
             path = ROOT / name
             if path.exists(): archive.write(path, path.relative_to(ROOT))
     latest = PACKAGES / f"LATEST_{profile}.txt"; latest.write_text(destination.name, encoding="utf-8")

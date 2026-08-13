@@ -2,6 +2,8 @@
 
 This folder is isolated from `Code/`; it does not modify the submitted implementation or old results. It implements the reduced plan in `Note/updates2.md` as an unattended, resumable workflow.
 
+For a concise step-by-step operating guide, see `RUN_INSTRUCTIONS.md`.
+
 ## One-command use
 
 Activate the Python/CUDA environment used by the original notebooks, then double-click or run:
