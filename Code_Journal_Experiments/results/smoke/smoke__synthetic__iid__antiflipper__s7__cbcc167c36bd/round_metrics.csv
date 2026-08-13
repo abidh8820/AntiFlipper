@@ -1,0 +1,3 @@
+round,loss,accuracy,asr,macro_class_accuracy,worst_class_accuracy,local_loss,selected_clients,aggregated_clients,excluded_clients,attacked_client_rounds,poisoned_examples,aggregation_seconds,round_seconds,mean_method_weight,tp,fp,fn,tn,precision,recall,f1,fpr,mean_detection_round
+0,2.307933654785156,0.11,0.09,0.11000000000000001,0.0,2.3052481015523276,4,4,0,1,35,0.007656099995074328,1.99170310000045,0.25,0,0,1,3,1.0,0.0,0.0,0.0,
+1,2.3077684020996094,0.11,0.09,0.11000000000000001,0.0,2.3101523319880166,4,4,0,1,35,0.00045559999853139743,0.045437099994160235,0.25,0,0,1,3,1.0,0.0,0.0,0.0,

@@ -1,0 +1,45 @@
+{
+  "job_count": 1,
+  "jobs": [
+    {
+      "absolute_threshold": 0.0005,
+      "attack_round_probability": 1.0,
+      "checkpoint_every": 1,
+      "counter_mode": "cumulative",
+      "counter_threshold": 1,
+      "data_root": "data",
+      "dataset": "SYNTHETIC",
+      "device": "auto",
+      "dirichlet_alpha": 1.0,
+      "distribution": "IID",
+      "eta": 0.1,
+      "eval_fraction": 1.0,
+      "experiment": "smoke",
+      "grace_rounds": 0,
+      "label_poison_fraction": 1.0,
+      "learning_rate": 0.01,
+      "local_batch_size": 16,
+      "local_epochs": 1,
+      "malicious_client_fraction": 0.25,
+      "method": "antiflipper",
+      "model": "auto",
+      "momentum": 0.9,
+      "notes": "",
+      "num_clients": 4,
+      "participation": 1.0,
+      "rho_threshold": 0.05,
+      "root_samples_per_class": 10,
+      "rounds": 2,
+      "seed": 7,
+      "tags": [
+        "smoke"
+      ],
+      "test_batch_size": 50,
+      "threshold_mode": "relative",
+      "trust_update": "quadratic",
+      "weight_decay": 0.0005
+    }
+  ],
+  "profile": "smoke",
+  "schema_version": 1
+}

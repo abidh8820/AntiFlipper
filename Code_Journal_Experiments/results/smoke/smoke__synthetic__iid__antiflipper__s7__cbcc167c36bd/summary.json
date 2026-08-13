@@ -1,0 +1,25 @@
+{
+  "job_id": "smoke__synthetic__iid__antiflipper__s7__cbcc167c36bd",
+  "status": "completed",
+  "config_hash": "cbcc167c36bd",
+  "final_accuracy": 0.11,
+  "last10_accuracy_mean": 0.11,
+  "last10_accuracy_std": 0.0,
+  "final_asr": 0.09,
+  "accuracy_auc": 0.11,
+  "final_precision": 1.0,
+  "final_recall": 0.0,
+  "final_f1": 0.0,
+  "final_fpr": 0.0,
+  "mean_aggregation_seconds": 0.004055849996802863,
+  "mean_round_seconds": 1.018570099997305,
+  "total_seconds": 2.08733360000042,
+  "attackers": [
+    1
+  ],
+  "excluded": [],
+  "detection_round": {},
+  "device": "cpu",
+  "torch_version": "2.13.0+cpu",
+  "platform": "Windows-11-10.0.26200-SP0"
+}
