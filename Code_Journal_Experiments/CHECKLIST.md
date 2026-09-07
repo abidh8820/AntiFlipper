@@ -1,6 +1,6 @@
 # Experiment checklist — smoke
 
-Updated: 2026-08-13T02:37:37.334443+00:00
+Updated: 2026-09-07T08:15:15.455405+00:00
 
 Progress: **1/1 complete**, 0 failed, 0 interrupted, 0 running.
 
