@@ -1,5 +1,5 @@
 index,job_id,experiment,dataset,distribution,method,seed,status
-1,a1_headline__mnist__iid__antiflipper__s7__4bc51d584b59,A1_headline,MNIST,IID,antiflipper,7,running
+1,a1_headline__mnist__iid__antiflipper__s7__4bc51d584b59,A1_headline,MNIST,IID,antiflipper,7,interrupted
 2,a1_headline__mnist__iid__antiflipper__s19__59b9f4b171d7,A1_headline,MNIST,IID,antiflipper,19,pending
 3,a1_headline__mnist__iid__antiflipper__s31__1fe5433c6092,A1_headline,MNIST,IID,antiflipper,31,pending
 4,a1_headline__mnist__iid__fedavg__s7__632dc8976de7,A1_headline,MNIST,IID,fedavg,7,pending
