@@ -1,5 +1,5 @@
 {
-  "status": "interrupted",
+  "status": "completed",
   "job_id": "a1_headline__mnist__iid__antiflipper__s7__4bc51d584b59",
-  "interrupted_at": 1788808246.0988505
+  "finished_at": 1788811056.794806
 }

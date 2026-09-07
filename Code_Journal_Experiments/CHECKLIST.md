@@ -1,16 +1,16 @@
 # Experiment checklist — core
 
-Updated: 2026-09-07T19:10:46.186140+00:00
+Updated: 2026-09-07T19:57:37.143329+00:00
 
-Progress: **0/258 complete**, 0 failed, 1 interrupted, 0 running.
+Progress: **1/258 complete**, 0 failed, 0 interrupted, 2 running.
 
 A checked item has a valid completed state file. Re-running the launcher skips it. Interrupted jobs resume from `checkpoint.pt`.
 
 | Done | # | Experiment | Dataset | Split | Method | Seed | Status |
 |---|---:|---|---|---|---|---:|---|
-| [ ] | 1 | A1_headline | MNIST | IID | antiflipper | 7 | interrupted |
-| [ ] | 2 | A1_headline | MNIST | IID | antiflipper | 19 | pending |
-| [ ] | 3 | A1_headline | MNIST | IID | antiflipper | 31 | pending |
+| [x] | 1 | A1_headline | MNIST | IID | antiflipper | 7 | completed |
+| [ ] | 2 | A1_headline | MNIST | IID | antiflipper | 19 | running |
+| [ ] | 3 | A1_headline | MNIST | IID | antiflipper | 31 | running |
 | [ ] | 4 | A1_headline | MNIST | IID | fedavg | 7 | pending |
 | [ ] | 5 | A1_headline | MNIST | IID | fedavg | 19 | pending |
 | [ ] | 6 | A1_headline | MNIST | IID | fedavg | 31 | pending |
