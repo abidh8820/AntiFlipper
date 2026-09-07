@@ -11,7 +11,7 @@ import traceback
 import hashlib
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -251,7 +251,12 @@ def _checkpoint_payload(
     }
 
 
-def run_experiment(cfg: ExperimentConfig, job_dir: Path, resume: bool = True) -> dict[str, Any]:
+def run_experiment(
+    cfg: ExperimentConfig,
+    job_dir: Path,
+    resume: bool = True,
+    stop_requested: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     cfg.validate(); job_dir.mkdir(parents=True, exist_ok=True)
     cfg.save(job_dir / "config.json")
     checkpoint_path = job_dir / "checkpoint.pt"
@@ -300,6 +305,10 @@ def run_experiment(cfg: ExperimentConfig, job_dir: Path, resume: bool = True) ->
     run_started = time.perf_counter()
     try:
         for round_index in range(start_round, cfg.rounds):
+            # Parallel workers use this cooperative stop point so Ctrl+C waits only
+            # for the current round and preserves the last atomic checkpoint.
+            if stop_requested is not None and stop_requested():
+                raise KeyboardInterrupt
             round_started = time.perf_counter()
             eligible = sorted(set(range(cfg.num_clients)) - excluded)
             count = max(1, int(round(cfg.participation * len(eligible))))

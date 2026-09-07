@@ -20,6 +20,7 @@ def parser() -> argparse.ArgumentParser:
         if name == "run":
             command.add_argument("--stop-on-error", action="store_true")
             command.add_argument("--no-retry-failed", action="store_true")
+            command.add_argument("--workers", type=int, default=1, help="number of experiment processes (default: 1)")
     return value
 
 
@@ -32,7 +33,7 @@ def main() -> int:
         _, _, rows = status_rows(manifest); write_checklist(manifest)
         counts = {name: sum(x["status"] == name for x in rows) for name in sorted({x["status"] for x in rows})}
         print(json.dumps({"total": len(rows), **counts}, indent=2)); return 0
-    if args.command == "run": return run_manifest(manifest, args.stop_on_error, not args.no_retry_failed)
+    if args.command == "run": return run_manifest(manifest, args.stop_on_error, not args.no_retry_failed, args.workers)
     if args.command == "analyze":
         print(json.dumps(analyze(RESULTS / args.profile, ANALYSIS / args.profile), indent=2)); return 0
     if args.command == "benchmark":

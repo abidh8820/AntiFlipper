@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
-from antiflipper_exp.attacks import PartiallyPoisonedDataset
 from antiflipper_exp.manifest import build
 
 

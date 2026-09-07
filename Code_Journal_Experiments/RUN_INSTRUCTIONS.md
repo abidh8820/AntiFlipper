@@ -57,6 +57,19 @@ This runs the default `core` profile containing 258 independently checkpointed j
 
 No manual intervention is needed between jobs.
 
+To run two independent jobs at once:
+
+```powershell
+.\run_all.cmd core 2
+```
+
+The second argument is the worker count. Use one launcher only; its parent
+process assigns unique jobs and safely owns checklist, analysis, and packaging
+writes. Begin with two workers and watch GPU memory, system memory, temperature,
+and completed jobs before increasing it. Parallel runs are suitable for model
+accuracy and detection results, but resource contention makes their observed
+round timing unsuitable for direct systems-performance comparisons.
+
 ## 5. Optionally run the full profile
 
 After the core profile has finished, run:

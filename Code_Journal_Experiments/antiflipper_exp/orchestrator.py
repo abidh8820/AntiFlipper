@@ -4,6 +4,7 @@ import contextlib
 import csv
 import hashlib
 import json
+import multiprocessing as mp
 import os
 import platform
 import shutil
@@ -11,8 +12,10 @@ import subprocess
 import sys
 import time
 import zipfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from .analysis import analyze
 from .config import ExperimentConfig
@@ -25,6 +28,7 @@ MANIFESTS = ROOT / "manifests"
 RESULTS = ROOT / "results"
 ANALYSIS = ROOT / "analysis"
 PACKAGES = ROOT / "packages"
+_WORKER_STOP_EVENT: Any = None
 
 
 class Tee:
@@ -34,6 +38,50 @@ class Tee:
         return len(value)
     def flush(self):
         for handle in self.handles: handle.flush()
+
+
+def _initialize_worker(stop_event: Any, worker_count: int) -> None:
+    global _WORKER_STOP_EVENT
+    _WORKER_STOP_EVENT = stop_event
+    # Prevent N worker processes from each claiming every host CPU thread.
+    try:
+        import torch
+        torch.set_num_threads(max(1, (os.cpu_count() or 1) // worker_count))
+    except Exception:
+        pass
+
+
+def _worker_stop_requested() -> bool:
+    return _WORKER_STOP_EVENT is not None and _WORKER_STOP_EVENT.is_set()
+
+
+def _run_one_job(index: int, total: int, cfg: ExperimentConfig, result_root: Path) -> dict[str, Any]:
+    """Run one uniquely assigned job. Shared reporting stays in the parent."""
+    if _worker_stop_requested():
+        return {"index": index, "job_id": cfg.job_id, "status": "cancelled"}
+    job_dir = result_root / cfg.job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    with (job_dir / "console.log").open("a", encoding="utf-8") as log:
+        stream = Tee(sys.stdout, log)
+        with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
+            print(f"[{index}/{total}] RUN {cfg.job_id}")
+            try:
+                run_experiment(cfg, job_dir, resume=True, stop_requested=_worker_stop_requested)
+                return {"index": index, "job_id": cfg.job_id, "status": "completed"}
+            except KeyboardInterrupt:
+                print("INTERRUPTED at a safe round boundary")
+                return {"index": index, "job_id": cfg.job_id, "status": "interrupted"}
+            except BaseException as exc:
+                print(f"FAILED: {exc!r}")
+                return {"index": index, "job_id": cfg.job_id, "status": "failed", "error": repr(exc)}
+            finally:
+                # Release cached allocations before this process accepts another job.
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
 
 
 def prepare_manifest(profile: str, force: bool = False) -> Path:
@@ -72,9 +120,9 @@ def write_checklist(manifest_path: Path) -> Path:
     return path
 
 
-def capture_environment(profile: str) -> None:
+def capture_environment(profile: str, workers: int = 1) -> None:
     output = RESULTS / profile / "environment"; output.mkdir(parents=True, exist_ok=True)
-    info = {"captured_at": datetime.now(timezone.utc).isoformat(), "python": sys.version, "executable": sys.executable, "platform": platform.platform()}
+    info = {"captured_at": datetime.now(timezone.utc).isoformat(), "python": sys.version, "executable": sys.executable, "platform": platform.platform(), "experiment_workers": workers}
     try:
         import torch
         info.update({"torch": torch.__version__, "cuda_available": torch.cuda.is_available(), "cuda_version": torch.version.cuda, "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None})
@@ -86,12 +134,56 @@ def capture_environment(profile: str) -> None:
     except Exception as exc: (output / "pip_freeze_error.txt").write_text(repr(exc), encoding="utf-8")
 
 
-def run_manifest(manifest_path: Path, stop_on_error: bool = False, retry_failed: bool = True) -> int:
+@contextlib.contextmanager
+def _profile_run_lock(profile: str):
+    """Prevent two launchers from scheduling the same profile concurrently."""
+    lock_root = ROOT / ".locks"
+    lock_root.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_root / f"{profile}.lock"
+    try:
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError as exc:
+        details = ""
+        try:
+            details = lock_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            pass
+        suffix = f" ({details})" if details else ""
+        raise RuntimeError(
+            f"Another {profile!r} launcher appears to be active{suffix}. "
+            f"Do not start two launchers. If the previous process crashed, verify it is stopped and delete {lock_path}."
+        ) from exc
+    try:
+        payload = {"pid": os.getpid(), "started_at": datetime.now(timezone.utc).isoformat()}
+        os.write(descriptor, json.dumps(payload).encode("utf-8"))
+        os.close(descriptor)
+        descriptor = -1
+        yield
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def run_manifest(manifest_path: Path, stop_on_error: bool = False, retry_failed: bool = True, workers: int = 1) -> int:
+    profile, _ = load_manifest(manifest_path)
+    with _profile_run_lock(profile):
+        return _run_manifest(manifest_path, stop_on_error, retry_failed, workers)
+
+
+def _run_manifest(manifest_path: Path, stop_on_error: bool = False, retry_failed: bool = True, workers: int = 1) -> int:
+    if workers < 1:
+        raise ValueError("workers must be at least 1")
     profile, jobs = load_manifest(manifest_path)
     result_root = RESULTS / profile; result_root.mkdir(parents=True, exist_ok=True)
-    capture_environment(profile); write_checklist(manifest_path)
+    capture_environment(profile, workers); write_checklist(manifest_path)
     failures = 0
+    interrupted = False
     try:
+        runnable: list[tuple[int, ExperimentConfig]] = []
         for index, cfg in enumerate(jobs, 1):
             job_dir = result_root / cfg.job_id
             current = job_status(job_dir)
@@ -101,22 +193,81 @@ def run_manifest(manifest_path: Path, stop_on_error: bool = False, retry_failed:
             if current == "failed" and not retry_failed:
                 print(f"[{index}/{len(jobs)}] SKIP failed {cfg.job_id}")
                 continue
-            job_dir.mkdir(parents=True, exist_ok=True)
-            print(f"[{index}/{len(jobs)}] RUN {cfg.job_id}")
-            with (job_dir / "console.log").open("a", encoding="utf-8") as log, contextlib.redirect_stdout(Tee(sys.stdout, log)), contextlib.redirect_stderr(Tee(sys.stderr, log)):
-                try: run_experiment(cfg, job_dir, resume=True)
-                except KeyboardInterrupt: raise
-                except BaseException as exc:
-                    failures += 1; print(f"FAILED: {exc!r}")
-                    if stop_on_error: raise
-            write_checklist(manifest_path)
+            runnable.append((index, cfg))
+
+        if not runnable:
+            print("No runnable jobs remain.")
+        elif workers == 1:
+            # Preserve the original in-process behavior for the default mode.
+            for index, cfg in runnable:
+                job_dir = result_root / cfg.job_id
+                job_dir.mkdir(parents=True, exist_ok=True)
+                print(f"[{index}/{len(jobs)}] RUN {cfg.job_id}")
+                with (job_dir / "console.log").open("a", encoding="utf-8") as log, contextlib.redirect_stdout(Tee(sys.stdout, log)), contextlib.redirect_stderr(Tee(sys.stderr, log)):
+                    try: run_experiment(cfg, job_dir, resume=True)
+                    except KeyboardInterrupt: raise
+                    except BaseException as exc:
+                        failures += 1; print(f"FAILED: {exc!r}")
+                        if stop_on_error: raise
+                write_checklist(manifest_path)
+        else:
+            worker_count = min(workers, len(runnable))
+            print(f"Running {len(runnable)} jobs with {worker_count} parallel workers on the available CUDA device(s).")
+            context = mp.get_context("spawn")
+            stop_event = context.Event()
+            executor = ProcessPoolExecutor(
+                max_workers=worker_count,
+                mp_context=context,
+                initializer=_initialize_worker,
+                initargs=(stop_event, worker_count),
+            )
+            futures = {
+                executor.submit(_run_one_job, index, len(jobs), cfg, result_root): (index, cfg)
+                for index, cfg in runnable
+            }
+            try:
+                for future in as_completed(futures):
+                    index, cfg = futures[future]
+                    try:
+                        result = future.result()
+                    except BaseException as exc:
+                        failures += 1
+                        print(f"[{index}/{len(jobs)}] WORKER FAILED {cfg.job_id}: {exc!r}")
+                        result = {"status": "failed"}
+                    status = result["status"]
+                    if status == "failed":
+                        failures += 1 if "error" in result else 0
+                    print(f"[{index}/{len(jobs)}] {status.upper()} {cfg.job_id}")
+                    write_checklist(manifest_path)
+                    error_text = str(result.get("error", "")).lower()
+                    resource_failure = status == "failed" and (
+                        "out of memory" in error_text or "cuda error" in error_text
+                    )
+                    if resource_failure:
+                        print("CUDA resource failure detected; stopping the queue. Resume with fewer workers.")
+                    if (stop_on_error and status == "failed") or resource_failure:
+                        stop_event.set()
+                        for pending in futures:
+                            pending.cancel()
+                        break
+            except KeyboardInterrupt:
+                interrupted = True
+                stop_event.set()
+                for pending in futures:
+                    pending.cancel()
+                print("Stopping workers after their current round is checkpointed...")
+            finally:
+                executor.shutdown(wait=True, cancel_futures=True)
     except KeyboardInterrupt:
+        interrupted = True
         print("Interrupted. The last completed round is checkpointed; run the same command to resume.")
-        return 130
     finally:
         write_checklist(manifest_path)
         analyze(result_root, ANALYSIS / profile)
         package(manifest_path)
+    if interrupted:
+        print("Interrupted. Run the same command to resume all unfinished jobs.")
+        return 130
     return 1 if failures else 0
 
 

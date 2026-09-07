@@ -18,6 +18,21 @@ That runs the **core** 258-job profile. To include the optional partial-flip and
 .\run_all.cmd full
 ```
 
+To run independent experiment jobs concurrently, pass a worker count as the
+second argument. Start conservatively because every worker has its own model,
+dataset objects, CPU memory, and CUDA context:
+
+```powershell
+.\run_all.cmd core 2
+```
+
+The parent process assigns every job exactly once and is solely responsible for
+the shared checklist, analysis, and ZIP package. Each worker writes only to its
+assigned job directory. Do not start a second launcher manually. On a 4 GB GTX
+1050 Ti, start with two workers for MNIST and return to one if CUDA runs out of
+memory. Parallel execution introduces resource contention, so use the separate
+fixed-workload benchmark or a serial run for publication-quality timing.
+
 To validate the pipeline cheaply before committing GPU time:
 
 ```powershell
@@ -76,6 +91,7 @@ The ZIP includes the manifest, checklist, source code, environment metadata, raw
 python cli.py plan --profile core
 python cli.py status --profile core
 python cli.py run --profile core
+python cli.py run --profile core --workers 2
 python cli.py analyze --profile core
 python cli.py benchmark --profile core
 python cli.py package --profile core

@@ -1,7 +1,9 @@
 param(
     [ValidateSet("smoke", "core", "full")]
     [string]$Profile = "core",
-    [string]$Python = $env:ANTIFLIPPER_PYTHON
+    [string]$Python = $env:ANTIFLIPPER_PYTHON,
+    [ValidateRange(1, 64)]
+    [int]$Workers = 1
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,5 +49,5 @@ if (($Profile -ne "smoke") -and (-not (Test-Path -LiteralPath $TimingFile))) {
         Write-Warning "The fixed-workload benchmark failed; experiment execution will continue and the error can be investigated separately."
     }
 }
-& $Python cli.py run --profile $Profile
+& $Python cli.py run --profile $Profile --workers $Workers
 exit $LASTEXITCODE

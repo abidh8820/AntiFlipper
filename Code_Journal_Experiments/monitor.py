@@ -72,7 +72,7 @@ def snapshot(profile: str) -> str:
     jobs = manifest.get("jobs", [])
     result_root = ROOT / "results" / profile
     counts = Counter()
-    active = None
+    active: list[dict] = []
     rates: dict[str, list[float]] = defaultdict(list)
 
     for config in jobs:
@@ -86,43 +86,53 @@ def snapshot(profile: str) -> str:
             if values:
                 rates[config.get("dataset", "unknown")].extend(values)
         if status == "running":
-            active = {"config": config, "state": state, "rows": rows, "job_dir": job_dir}
+            active.append({"config": config, "state": state, "rows": rows, "job_dir": job_dir})
 
     current_eta = None
     total_eta = None
-    active_text = "No job is currently running."
+    active_text = "No job is currently running.\n"
     if active:
-        config = active["config"]
-        rows = active["rows"]
-        values = [float(row["round_seconds"]) for row in rows if row.get("round_seconds")]
-        average = sum(values) / len(values) if values else None
-        done_rounds = len(rows)
-        total_rounds = int(config.get("rounds", 0))
-        remaining_rounds = max(0, total_rounds - done_rounds)
-        current_eta = remaining_rounds * average if average is not None else None
-        active_text = (
-            f"{config.get('experiment')} | {config.get('dataset')} {config.get('distribution')} | "
-            f"{config.get('method')} | seed {config.get('seed')}\n"
-            f"  Rounds: {done_rounds}/{total_rounds} ({100 * done_rounds / max(1, total_rounds):.1f}%)\n"
-            f"  Average round: {average:.1f}s\n" if average is not None else
-            f"{config.get('experiment')} | {config.get('dataset')} | {config.get('method')}\n"
-            f"  Rounds: {done_rounds}/{total_rounds}\n"
-            f"  Average round: collecting data\n"
-        )
-        active_text += f"  Current job remaining: {format_duration(current_eta)}\n"
+        active_lines: list[str] = []
+        total_work_seconds = 0.0
+        fallback_values: list[float] = []
+        for item in active:
+            config = item["config"]
+            rows = item["rows"]
+            values = [float(row["round_seconds"]) for row in rows if row.get("round_seconds")]
+            average = sum(values) / len(values) if values else None
+            if values:
+                fallback_values.extend(values)
+            done_rounds = len(rows)
+            total_rounds = int(config.get("rounds", 0))
+            remaining_rounds = max(0, total_rounds - done_rounds)
+            current_eta = remaining_rounds * average if average is not None else None
+            if current_eta is not None:
+                total_work_seconds += current_eta
+            active_lines.append(
+                f"{config.get('experiment')} | {config.get('dataset')} {config.get('distribution')} | "
+                f"{config.get('method')} | seed {config.get('seed')}\n"
+                f"  Rounds: {done_rounds}/{total_rounds} ({100 * done_rounds / max(1, total_rounds):.1f}%)\n"
+                f"  Average round: {average:.1f}s\n"
+                f"  Remaining: {format_duration(current_eta)}"
+                if average is not None else
+                f"{config.get('experiment')} | {config.get('dataset')} | {config.get('method')}\n"
+                f"  Rounds: {done_rounds}/{total_rounds}\n"
+                f"  Average round: collecting data"
+            )
+        active_text = "\n\n".join(active_lines) + "\n"
 
-        total_eta_seconds = current_eta or 0.0
         for pending in jobs:
             pending_dir = result_root / job_id(pending)
             pending_state = read_json(pending_dir / "state.json").get("status", "pending")
             if pending_state in {"completed", "running"}:
                 continue
             dataset = pending.get("dataset", "unknown")
-            dataset_values = rates.get(dataset) or values
+            dataset_values = rates.get(dataset) or fallback_values
             dataset_average = sum(dataset_values) / len(dataset_values) if dataset_values else None
             if dataset_average is not None:
-                total_eta_seconds += int(pending.get("rounds", 0)) * dataset_average
-        total_eta = total_eta_seconds
+                total_work_seconds += int(pending.get("rounds", 0)) * dataset_average
+        # Approximate wall time by sharing the remaining work among active workers.
+        total_eta = total_work_seconds / max(1, len(active))
 
     total = len(jobs)
     completed = counts.get("completed", 0)
