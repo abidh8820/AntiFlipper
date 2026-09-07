@@ -1,6 +1,6 @@
 # Experiment checklist — core
 
-Updated: 2026-09-07T19:57:37.143329+00:00
+Updated: 2026-09-07T20:43:05.674546+00:00
 
 Progress: **1/258 complete**, 0 failed, 0 interrupted, 2 running.
 

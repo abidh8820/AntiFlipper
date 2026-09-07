@@ -1,0 +1,7 @@
+TO run 
+cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
+.\run_all.cmd core 2
+
+Monitor
+cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
+.\monitor.cmd core
