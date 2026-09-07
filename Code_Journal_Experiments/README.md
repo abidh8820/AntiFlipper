@@ -81,6 +81,14 @@ python cli.py benchmark --profile core
 python cli.py package --profile core
 ```
 
+For a live progress view in a second PowerShell window, run:
+
+```powershell
+.\monitor.cmd core
+```
+
+The monitor shows the current job, completed rounds, current-job ETA, rough total ETA, job counts, stored results/checkpoints/archives, and free disk space. It refreshes every 10 seconds. Press `Ctrl+C` to close the monitor; this does not stop the experiment.
+
 The fixed-workload benchmark is separate from observed end-to-end round timing. Run it when convenient; it creates matched-update-count timing files under `analysis/<profile>/timing/`.
 
 ## Methodology encoded by the pipeline

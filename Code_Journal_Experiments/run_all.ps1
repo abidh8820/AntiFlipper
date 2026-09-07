@@ -9,7 +9,7 @@ $PipelineRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $PipelineRoot
 
 if (-not $Python) {
-    $WorkspacePython = Join-Path (Split-Path -Parent $PipelineRoot) ".venv\Scripts\python.exe"
+    $WorkspacePython = Join-Path $PipelineRoot ".venv\Scripts\python.exe"
     if (Test-Path -LiteralPath $WorkspacePython) {
         $Python = $WorkspacePython
     } else {
