@@ -1,10 +1,10 @@
 index,job_id,experiment,dataset,distribution,method,seed,status
 1,a1_headline__mnist__iid__antiflipper__s7__4bc51d584b59,A1_headline,MNIST,IID,antiflipper,7,completed
-2,a1_headline__mnist__iid__antiflipper__s19__59b9f4b171d7,A1_headline,MNIST,IID,antiflipper,19,running
-3,a1_headline__mnist__iid__antiflipper__s31__1fe5433c6092,A1_headline,MNIST,IID,antiflipper,31,interrupted
-4,a1_headline__mnist__iid__fedavg__s7__632dc8976de7,A1_headline,MNIST,IID,fedavg,7,pending
-5,a1_headline__mnist__iid__fedavg__s19__7bc548c7e8c7,A1_headline,MNIST,IID,fedavg,19,pending
-6,a1_headline__mnist__iid__fedavg__s31__56d6dbfd6a89,A1_headline,MNIST,IID,fedavg,31,pending
+2,a1_headline__mnist__iid__antiflipper__s19__59b9f4b171d7,A1_headline,MNIST,IID,antiflipper,19,completed
+3,a1_headline__mnist__iid__antiflipper__s31__1fe5433c6092,A1_headline,MNIST,IID,antiflipper,31,completed
+4,a1_headline__mnist__iid__fedavg__s7__632dc8976de7,A1_headline,MNIST,IID,fedavg,7,completed
+5,a1_headline__mnist__iid__fedavg__s19__7bc548c7e8c7,A1_headline,MNIST,IID,fedavg,19,completed
+6,a1_headline__mnist__iid__fedavg__s31__56d6dbfd6a89,A1_headline,MNIST,IID,fedavg,31,completed
 7,a1_headline__mnist__iid__median__s7__fd1bb4d9c746,A1_headline,MNIST,IID,median,7,pending
 8,a1_headline__mnist__iid__median__s19__0ac26f61b6ee,A1_headline,MNIST,IID,median,19,pending
 9,a1_headline__mnist__iid__median__s31__dbf5c98f5d3a,A1_headline,MNIST,IID,median,31,pending

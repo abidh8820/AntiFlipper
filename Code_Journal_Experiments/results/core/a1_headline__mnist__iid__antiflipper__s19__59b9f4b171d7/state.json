@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "completed",
   "job_id": "a1_headline__mnist__iid__antiflipper__s19__59b9f4b171d7",
-  "started_at": 1788817557.1736457
+  "finished_at": 1788823884.2032309
 }

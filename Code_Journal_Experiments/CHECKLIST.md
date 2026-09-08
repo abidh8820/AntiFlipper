@@ -1,19 +1,19 @@
 # Experiment checklist — core
 
-Updated: 2026-09-07T21:49:14.808824+00:00
+Updated: 2026-09-08T17:53:20.129810+00:00
 
-Progress: **1/258 complete**, 0 failed, 1 interrupted, 1 running.
+Progress: **6/258 complete**, 0 failed, 0 interrupted, 0 running.
 
 A checked item has a valid completed state file. Re-running the launcher skips it. Interrupted jobs resume from `checkpoint.pt`.
 
 | Done | # | Experiment | Dataset | Split | Method | Seed | Status |
 |---|---:|---|---|---|---|---:|---|
 | [x] | 1 | A1_headline | MNIST | IID | antiflipper | 7 | completed |
-| [ ] | 2 | A1_headline | MNIST | IID | antiflipper | 19 | running |
-| [ ] | 3 | A1_headline | MNIST | IID | antiflipper | 31 | interrupted |
-| [ ] | 4 | A1_headline | MNIST | IID | fedavg | 7 | pending |
-| [ ] | 5 | A1_headline | MNIST | IID | fedavg | 19 | pending |
-| [ ] | 6 | A1_headline | MNIST | IID | fedavg | 31 | pending |
+| [x] | 2 | A1_headline | MNIST | IID | antiflipper | 19 | completed |
+| [x] | 3 | A1_headline | MNIST | IID | antiflipper | 31 | completed |
+| [x] | 4 | A1_headline | MNIST | IID | fedavg | 7 | completed |
+| [x] | 5 | A1_headline | MNIST | IID | fedavg | 19 | completed |
+| [x] | 6 | A1_headline | MNIST | IID | fedavg | 31 | completed |
 | [ ] | 7 | A1_headline | MNIST | IID | median | 7 | pending |
 | [ ] | 8 | A1_headline | MNIST | IID | median | 19 | pending |
 | [ ] | 9 | A1_headline | MNIST | IID | median | 31 | pending |
