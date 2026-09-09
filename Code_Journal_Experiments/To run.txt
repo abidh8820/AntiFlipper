@@ -3,5 +3,5 @@ cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
 .\run_all.cmd core 1
 
 Monitor
-cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
-.\monitor.cmd core
+cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments monitor.py
+5
