@@ -5,7 +5,7 @@ index,job_id,experiment,dataset,distribution,method,seed,status
 4,a1_headline__mnist__iid__fedavg__s7__632dc8976de7,A1_headline,MNIST,IID,fedavg,7,completed
 5,a1_headline__mnist__iid__fedavg__s19__7bc548c7e8c7,A1_headline,MNIST,IID,fedavg,19,completed
 6,a1_headline__mnist__iid__fedavg__s31__56d6dbfd6a89,A1_headline,MNIST,IID,fedavg,31,completed
-7,a1_headline__mnist__iid__median__s7__fd1bb4d9c746,A1_headline,MNIST,IID,median,7,interrupted
+7,a1_headline__mnist__iid__median__s7__fd1bb4d9c746,A1_headline,MNIST,IID,median,7,running
 8,a1_headline__mnist__iid__median__s19__0ac26f61b6ee,A1_headline,MNIST,IID,median,19,pending
 9,a1_headline__mnist__iid__median__s31__dbf5c98f5d3a,A1_headline,MNIST,IID,median,31,pending
 10,a1_headline__mnist__iid__trimmed_mean__s7__95b2e6f6be92,A1_headline,MNIST,IID,trimmed_mean,7,pending

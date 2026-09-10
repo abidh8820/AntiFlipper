@@ -3,5 +3,14 @@ cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
 .\run_all.cmd core 1
 
 Monitor
-cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments monitor.py
-5
+cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
+.\monitor.cmd core
+
+# Terminal 1
+cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
+.\run_all.cmd core 1
+
+
+# Terminal 2
+cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
+.\monitor.cmd core
