@@ -1,0 +1,20 @@
+\begin{table}[t]
+\centering
+\caption{Report-faking adaptive attacker on CIFAR-10 non-IID: attackers train on flipped labels but report the accuracy measured on their clean labels. Methods that do not use reports are unaffected, so their honest-report runs apply to both columns.}
+\label{tab:adaptive}
+\renewcommand{\arraystretch}{1.1}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l|cc|cc}
+\hline
+& \multicolumn{2}{c|}{\textbf{Honest reports}} & \multicolumn{2}{c}{\textbf{Faked reports}} \\
+\textbf{Method} & Acc. (\%) & Recall & Acc. (\%) & Recall \\
+\hline
+LFighter & -- & -- & -- & -- \\
+FLTrust$^\dagger$ & -- & -- & -- & -- \\
+CC only & -- & -- & -- & -- \\
+AntiFLipper (reports) & -- & -- & -- & -- \\
+\textbf{AntiFLipper-CC} & -- & -- & -- & -- \\
+\hline
+\end{tabular}
+\end{table}

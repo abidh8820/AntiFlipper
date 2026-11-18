@@ -1,0 +1,20 @@
+\begin{table}[t]
+\centering
+\caption{Measured cost per round for AntiFLipper-CC (mean over seeds). Client: report evaluation vs.\ local training time per client and their ratio. Server: defense time (cross-check, trust update and aggregation) and peak GPU memory of the job. Upload: extra bytes over FedAvg per client.}
+\label{tab:cost}
+\renewcommand{\arraystretch}{1.1}
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{l|ccc|cc|c}
+\hline
+& \multicolumn{3}{c|}{\textbf{Client}} & \multicolumn{2}{c|}{\textbf{Server}} & \\
+\textbf{Setting} & Eval & Train & Ratio & Defense & GPU & \textbf{Upl.} \\
+ & (s) & (s) & (\%) & (ms) & (MB) & \\
+\hline
+CIFAR non-IID & -- & -- & -- & -- & -- & -- \\
+CIFAR IID & -- & -- & -- & -- & -- & -- \\
+MNIST non-IID & -- & -- & -- & -- & -- & -- \\
+MNIST IID & -- & -- & -- & -- & -- & -- \\
+\hline
+\end{tabular}
+\end{table}

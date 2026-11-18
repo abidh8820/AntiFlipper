@@ -1,0 +1,24 @@
+\begin{table*}[t]
+\centering
+\caption{Final test accuracy (\%, mean$\pm$std over 3 seeds) with 40\% label-flipping clients, and server-side defense time per round on CIFAR-10 non-IID. $^\dagger$FLTrust additionally uses a 100-sample clean root dataset at the server. -- : not run in this setting or not yet completed.}
+\label{tab:headline}
+\renewcommand{\arraystretch}{1.12}
+\small
+\begin{tabular}{l|cc|cc|c}
+\hline
+& \multicolumn{2}{c|}{\textbf{CIFAR-10 (ResNet-18, 20 clients)}} & \multicolumn{2}{c|}{\textbf{MNIST (CNN, 100 clients)}} & \textbf{Defense time} \\
+\textbf{Method} & non-IID ($\alpha_D{=}1$) & IID & non-IID ($\alpha_D{=}1$) & IID & (ms, CIFAR non-IID) \\
+\hline
+FedAvg & -- & -- & -- & -- & -- \\
+Median & -- & -- & -- & -- & -- \\
+Multi-Krum & -- & -- & -- & -- & -- \\
+FLAME & -- & -- & -- & -- & -- \\
+LFighter & -- & -- & -- & -- & -- \\
+FLTrust$^\dagger$ & -- & -- & -- & -- & -- \\
+\hline
+CC only & -- & -- & -- & -- & -- \\
+AntiFLipper (reports) & -- & -- & -- & -- & -- \\
+\textbf{AntiFLipper-CC} & -- & -- & -- & -- & -- \\
+\hline
+\end{tabular}
+\end{table*}

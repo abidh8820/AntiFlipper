@@ -59,6 +59,17 @@ Each entry: date, what was discussed/done, decisions, and next steps.
 - First real CIFAR non-IID CC result (round 27): all 8 attackers excluded, 0 honest excluded, accuracy 69%.
 - Added client-side metrics: `client_eval_seconds`, `client_train_seconds`, `client_eval_overhead` (eval/train), `client_eval_samples`, `peak_gpu_memory_mb`. The report now uses a lean `_report_accuracy`, which gives identical values (verified), so the timing reflects a real client. Jobs finished before this change lack these columns.
 - Metrics audit (same session): added `client_history.csv` (per-client per-round raw and effective report, consistency similarity, trust, counter, weight, loss; truncated on resume, so no duplicate rounds, verified). Also added peak GPU reserved, peak process RSS, per-round upload/download bytes, test-eval time, max client times, and summary detection delay (`mean_detection_round`, `full_detection_round`, `first_honest_exclusion_round`). Confirmed the manifest covers LFighter, FLTrust, FLAME, Multi-Krum, Median, FedAvg plus the 3 variants (core) and Trimmed Mean, FoolsGold, Tolpegin (full). EXPERIMENTS.md now lists every recorded metric.
+
+## 2026-11-18 (session 7) — paper v9
+
+- Created `Paper/v9/AntiFlipper_v9.tex`: 7 pages, standard IEEEtran margins, compiles cleanly. Retitled "Lightweight Detection of Label-Flipping and Report-Faking Clients". Contributions:
+  - the report-faking attacker (Prop. 2: report-only detection cannot separate faked reports);
+  - AntiFLipper-CC (M3 consistency check, Algorithm 1);
+  - a multi-seed evaluation.
+- Notation table fixes the α overload (η, α_D, γ, z, ρ). Removed the dynamic-attack table and the γ=0.1 numbers (no logs back them). Added bib entries `lamport1982byzantine` and `andreina2021baffle`.
+- `Paper/v9/make_results.py` generates all tables (II headline, III detection, IV adaptive, V sensitivity, VI cost) and figures (gen_ratio, gen_heterogeneity, gen_trajectories) from `Code_Journal_Experiments/results/core`; it shows "--"/pending until runs exist. Red `\pending{}` notes mark interpretation to write after the results arrive. `Paper/v9/README.md` maps every reviewer comment to the change.
+- Note: GPU-side commit `df84084` deleted the 6 old MNIST results and CC s31; they will be re-run (better, since they now get the full metrics). They are recoverable from `c3e21f1`.
+- **Next:** when runs complete, pull, run make_results.py, rewrite the \pending sentences.
 - **Next:** the user runs `run_all.cmd core 2` on the GPU machine and sends back `analysis/core/REPORT.md`; then the 6–8 page paper revision.
 
 ## 2026-11-18 (session 6)

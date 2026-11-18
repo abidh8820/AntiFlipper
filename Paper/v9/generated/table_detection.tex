@@ -1,0 +1,23 @@
+\begin{table}[t]
+\centering
+\caption{Attack impact and attacker identification on CIFAR-10 non-IID (40\% attackers, mean over 3 seeds). ASR: share of test predictions equal to the flipped label. P/R/FPR: final precision, recall and false-positive rate of the excluded (AntiFLipper variants) or zero-weighted (baselines) clients. Det.: mean round at which an attacker is excluded.}
+\label{tab:detection}
+\renewcommand{\arraystretch}{1.1}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{l|c|ccc|c}
+\hline
+\textbf{Method} & \textbf{ASR (\%)} & \textbf{P} & \textbf{R} & \textbf{FPR} & \textbf{Det.} \\
+\hline
+FedAvg & -- & n/a & n/a & n/a & n/a \\
+Median & -- & n/a & n/a & n/a & n/a \\
+Multi-Krum & -- & -- & -- & -- & n/a \\
+FLAME & -- & -- & -- & -- & n/a \\
+LFighter & -- & -- & -- & -- & n/a \\
+FLTrust$^\dagger$ & -- & -- & -- & -- & n/a \\
+CC only & -- & -- & -- & -- & -- \\
+AntiFLipper (reports) & -- & -- & -- & -- & -- \\
+\textbf{AntiFLipper-CC} & -- & -- & -- & -- & -- \\
+\hline
+\end{tabular}
+\end{table}
