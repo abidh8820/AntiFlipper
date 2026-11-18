@@ -38,6 +38,9 @@ class ClientResult:
     reported_accuracy: float
     attacked: bool
     poisoned_examples: int
+    eval_seconds: float = 0.0
+    train_seconds: float = 0.0
+    eval_samples: int = 0
 
 
 def resolve_device(requested: str) -> torch.device:
@@ -133,8 +136,13 @@ def train_local(
     model.load_state_dict(global_state)
     report_source = dataset if (attacked and cfg.report_strategy == "clean_labels") else training_data
     eval_data = _evaluation_subset(report_source, cfg.eval_fraction, local_seed + 23)
-    reported_accuracy = evaluate(model, eval_data, cfg.test_batch_size, device)["accuracy"]
+    _sync(device)
+    eval_started = time.perf_counter()
+    reported_accuracy = _report_accuracy(model, eval_data, cfg.test_batch_size, device)
+    _sync(device)
+    eval_seconds = time.perf_counter() - eval_started
 
+    train_started = time.perf_counter()
     model.train()
     batch_norm_layers = [layer for layer in model.modules() if isinstance(layer, nn.BatchNorm2d)]
     optimizer = torch.optim.SGD(model.parameters(), lr=cfg.learning_rate, momentum=cfg.momentum, weight_decay=cfg.weight_decay)
@@ -158,9 +166,31 @@ def train_local(
             loss.backward()
             optimizer.step()
             losses.append(float(loss.detach()))
+    _sync(device)
+    train_seconds = time.perf_counter() - train_started
     state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
     del model
-    return ClientResult(client_id, state, float(np.mean(losses)), reported_accuracy, attacked, poisoned_examples)
+    return ClientResult(client_id, state, float(np.mean(losses)), reported_accuracy, attacked, poisoned_examples,
+                        eval_seconds, train_seconds, len(eval_data))
+
+
+def _sync(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+@torch.no_grad()
+def _report_accuracy(model: nn.Module, dataset: Dataset, batch_size: int, device: torch.device) -> float:
+    """What a real client computes for its report: plain accuracy, nothing else.
+    Same batches and predictions as `evaluate`, so the value is identical; only the
+    timing is representative of the client-side cost."""
+    model.eval()
+    correct = total = 0
+    for data, target in _loader(dataset, batch_size, False, 0):
+        data, target = data.to(device), torch.as_tensor(target, device=device, dtype=torch.long)
+        correct += int((model(data).argmax(dim=1) == target).sum())
+        total += len(target)
+    return correct / max(total, 1)
 
 
 def _attack_occurs(cfg: ExperimentConfig, client_id: int, round_index: int) -> bool:
@@ -365,6 +395,8 @@ def run_experiment(
             if stop_requested is not None and stop_requested():
                 raise KeyboardInterrupt
             round_started = time.perf_counter()
+            if device.type == "cuda":
+                torch.cuda.reset_peak_memory_stats(device)
             eligible = sorted(set(range(cfg.num_clients)) - excluded)
             count = max(1, int(round(cfg.participation * len(eligible))))
             selection_rng = np.random.default_rng(cfg.seed * 3_000_017 + round_index)
@@ -431,6 +463,14 @@ def run_experiment(
             row = {
                 "round": round_index, **test,
                 "local_loss": float(np.mean([x.local_loss for x in client_results])),
+                # Client-side cost of the accuracy report (one forward pass over the local
+                # evaluation data) vs. the local training it accompanies.
+                "client_eval_seconds": float(np.mean([x.eval_seconds for x in client_results])),
+                "client_train_seconds": float(np.mean([x.train_seconds for x in client_results])),
+                "client_eval_overhead": float(np.sum([x.eval_seconds for x in client_results]) / max(np.sum([x.train_seconds for x in client_results]), 1e-12)),
+                "client_eval_samples": float(np.mean([x.eval_samples for x in client_results])),
+                # Peak GPU memory of this worker process during the round (one process per job).
+                "peak_gpu_memory_mb": torch.cuda.max_memory_allocated(device) / 2**20 if device.type == "cuda" else "",
                 "selected_clients": len(selected), "aggregated_clients": len(admitted), "excluded_clients": len(excluded),
                 "attacked_client_rounds": sum(x.attacked for x in client_results),
                 "poisoned_examples": sum(x.poisoned_examples for x in client_results),
@@ -493,6 +533,11 @@ def run_experiment(
             "upload_bytes_per_client_round": model_bytes + (4 if cfg.method in REPORT_METHODS else 0),
             "final_surviving_clients": cfg.num_clients - len(excluded),
             "mean_round_seconds": float(np.mean([x["round_seconds"] for x in rows])),
+            # Rounds restored from a pre-timing checkpoint lack these columns; _mean skips them.
+            "mean_client_eval_seconds": _mean("client_eval_seconds"),
+            "mean_client_train_seconds": _mean("client_train_seconds"),
+            "mean_client_eval_overhead": _mean("client_eval_overhead"),
+            "peak_gpu_memory_mb": max((float(x["peak_gpu_memory_mb"]) for x in rows if x.get("peak_gpu_memory_mb", "") != ""), default=None),
             "total_seconds": time.perf_counter() - run_started, "attackers": sorted(attackers), "excluded": sorted(excluded),
             "detection_round": detection_round, "device": str(device), "torch_version": torch.__version__, "platform": platform.platform(),
         }

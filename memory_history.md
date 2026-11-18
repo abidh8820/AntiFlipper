@@ -51,7 +51,14 @@ Each entry: date, what was discussed/done, decisions, and next steps.
   - Whether cc_only ≈ CC; if so, the accuracy report adds little.
   - Old paper numbers may shrink under multi-seed final-accuracy reporting.
 - Pushed `reduced-matrix-2026`.
-- Saved a project-status memory. **Next:** the user runs `run_all.cmd core 2` on the GPU machine and sends back `analysis/core/REPORT.md`; then the 6–8 page paper revision.
+- Saved a project-status memory.
+
+## 2026-11-18 (session 6)
+
+- The GPU run started on the other machine: Linux, RTX 3090, 2 workers, about 35 s per round, so about 1 h per CIFAR job and an estimated 4–5 days in total. The user's commit `c3e21f1` from that machine fixed a ResNet BatchNorm crash on size-1 batches (singleton batches use BN eval mode) and added durable writes plus a posix flock.
+- First real CIFAR non-IID CC result (round 27): all 8 attackers excluded, 0 honest excluded, accuracy 69%.
+- Added client-side metrics: `client_eval_seconds`, `client_train_seconds`, `client_eval_overhead` (eval/train), `client_eval_samples`, `peak_gpu_memory_mb`. The report now uses a lean `_report_accuracy`, which gives identical values (verified), so the timing reflects a real client. Jobs finished before this change lack these columns.
+- **Next:** the user runs `run_all.cmd core 2` on the GPU machine and sends back `analysis/core/REPORT.md`; then the 6–8 page paper revision.
 
 ## 2026-11-18 (session 6)
 
