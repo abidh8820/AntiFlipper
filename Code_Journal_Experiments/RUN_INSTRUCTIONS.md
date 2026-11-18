@@ -48,10 +48,10 @@ The smoke profile runs a small offline synthetic experiment. It verifies trainin
 .\run_all.cmd
 ```
 
-This runs the default `core` profile: 171 independently checkpointed jobs in priority order (see `EXPERIMENTS.md`):
+This runs the default `core` profile: 219 independently checkpointed jobs in priority order (see `EXPERIMENTS.md`):
 
-- P1: CIFAR-10 non-IID headline (incl. FLTrust and AntiFLipper-CC) and the adaptive report-faking attacker;
-- P2: malicious-ratio boundary, clean and attacked heterogeneity;
+- P1: CIFAR-10 non-IID headline with the CC / reports-only / cc_only ablation, and the adaptive report-faking attacker;
+- P2: clean and attacked heterogeneity, malicious ratio 10-30% (40% = headline; the threat model caps attackers at 40%);
 - P3: CIFAR-10 IID, MNIST, and threshold sensitivity.
 
 The 6 MNIST-IID jobs completed under the old 258-job manifest are skipped automatically.
@@ -79,7 +79,7 @@ After the core profile has finished, run:
 .\run_all.cmd full
 ```
 
-The full profile contains the core jobs plus the optional A4 partial-flip, A6 ablation, and legacy-baseline (Trimmed Mean, FoolsGold, Tolpegin) experiments, for 237 jobs total. Jobs already completed under a different profile have separate result directories; do not delete core results.
+The full profile contains the core jobs plus the optional A4 partial-flip, A6 ablation, and legacy-baseline (Trimmed Mean, FoolsGold, Tolpegin) experiments, for 294 jobs total. Jobs already completed under a different profile have separate result directories; do not delete core results.
 
 ## Interruption and automatic resumption
 

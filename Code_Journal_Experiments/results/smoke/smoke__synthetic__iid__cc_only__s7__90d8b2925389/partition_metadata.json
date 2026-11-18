@@ -1,0 +1,19 @@
+{
+  "client_sizes": {
+    "0": 35,
+    "1": 35,
+    "2": 35,
+    "3": 35
+  },
+  "client_index_sha256": {
+    "0": "69132f3c38a338cbf121bbee4d998606a8f7ecc3e3b771751ffb4aa32fde89a5",
+    "1": "93513eae4da92f4bb421b66199744a16fb17d65dfc17435b73950aabb39b5de4",
+    "2": "8a467e35e6a882307452ac37150dae591f00f4e9217c6ca2f02f0f49506e79f9",
+    "3": "e2c82d286fa417e998901aa84671c3e00f55ecf6e3a50eeeb7fdd2bf3cc13d88"
+  },
+  "root_size": 100,
+  "root_index_sha256": "5177f38e8fd7e0c8d84bc5d13f3422bb4dfefaaa38e84589a8905cc7abc031f3",
+  "attackers": [
+    1
+  ]
+}

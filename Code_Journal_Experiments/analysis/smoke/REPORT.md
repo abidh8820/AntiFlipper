@@ -1,6 +1,6 @@
 # AntiFLipper automated analysis
 
-Completed runs analyzed: **3**.
+Completed runs analyzed: **4**.
 
 ## Included experiment groups
 

@@ -15,7 +15,7 @@ from .config import ExperimentConfig
 from .models import create_model
 
 
-METHODS = ("antiflipper", "antiflipper_cc", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
+METHODS = ("antiflipper", "antiflipper_cc", "cc_only", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
 
 
 def _antiflipper_server_work(method: str, states: list[dict], base: dict, count: int, iteration: int) -> None:
@@ -23,9 +23,9 @@ def _antiflipper_server_work(method: str, states: list[dict], base: dict, count:
     just a weighted average: (cc) consistency check + trust update + thresholding."""
     from .engine import _update_trust
 
-    if method == "antiflipper_cc":
+    if method in ("antiflipper_cc", "cc_only"):
         update_consistency(states, base, 2.5)
-    cfg = ExperimentConfig("bench", "MNIST", "IID", "antiflipper", 0, rounds=1, num_clients=count)
+    cfg = ExperimentConfig("bench", "MNIST", "IID", method, 0, rounds=1, num_clients=count)
     rng = np.random.default_rng(iteration)
     reports = {i: float(x) for i, x in enumerate(rng.uniform(0.5, 1.0, count))}
     trust = {i: 1.0 / count for i in range(count)}
@@ -67,7 +67,7 @@ def fixed_workload_benchmark(output: Path, iterations: int = 5) -> list[dict]:
                     runtime = AggregatorState()
                     for iteration in range(iterations + 1):
                         started = time.perf_counter()
-                        if method in ("antiflipper", "antiflipper_cc"):
+                        if method in ("antiflipper", "antiflipper_cc", "cc_only"):
                             _antiflipper_server_work(method, states, base, count, iteration)
                         aggregate(method, states, base, client_ids, 0.4, runtime, trust_weights=trust, root_state=root, seed=iteration)
                         elapsed = time.perf_counter() - started

@@ -10,7 +10,14 @@ from typing import Any
 LABEL_MAP = {0: 1, 1: 0, 2: 3, 3: 2, 4: 5, 5: 4, 6: 7, 7: 6, 8: 9, 9: 8}
 
 # Methods whose server logic is the AntiFLipper trust pipeline.
-ANTIFLIPPER_METHODS = {"antiflipper", "antiflipper_cc"}
+#   antiflipper     accuracy reports only (submitted method)
+#   antiflipper_cc  accuracy reports + update-consistency cross-check (proposed)
+#   cc_only         ablation: consistency cross-check only, reports ignored, uniform weights
+ANTIFLIPPER_METHODS = {"antiflipper", "antiflipper_cc", "cc_only"}
+CONSISTENCY_METHODS = {"antiflipper_cc", "cc_only"}
+REPORT_METHODS = {"antiflipper", "antiflipper_cc"}
+# Threat model: at most 40% of clients are malicious.
+MAX_MALICIOUS_FRACTION = 0.4
 KNOWN_METHODS = ANTIFLIPPER_METHODS | {"fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust"}
 
 # Fields added after the first experiments were run. They are omitted from the
@@ -69,6 +76,8 @@ class ExperimentConfig:
             raise ValueError("report_strategy must be honest or clean_labels")
         if self.consistency_z <= 0:
             raise ValueError("consistency_z must be positive")
+        if self.malicious_client_fraction > MAX_MALICIOUS_FRACTION + 1e-9:
+            raise ValueError(f"malicious_client_fraction above the {MAX_MALICIOUS_FRACTION:.0%} threat-model bound")
         if self.dataset not in {"MNIST", "CIFAR10", "SYNTHETIC"}:
             raise ValueError(f"Unsupported dataset: {self.dataset}")
         if self.distribution not in {"IID", "NON_IID"}:

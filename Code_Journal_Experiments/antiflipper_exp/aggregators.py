@@ -273,7 +273,7 @@ def aggregate(
     n = len(states)
     if method == "fedavg":
         weights = np.ones(n); return weighted_average(states, weights), weights
-    if method in ("antiflipper", "antiflipper_cc"):
+    if method in ("antiflipper", "antiflipper_cc", "cc_only"):
         weights = np.asarray(trust_weights, dtype=float); return weighted_average(states, weights), weights
     if method == "median":
         return coordinate_median(states), np.ones(n)

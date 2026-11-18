@@ -104,6 +104,9 @@ def _automated_findings(aggregate: list[dict]) -> list[str]:
     if boundary:
         if failed: lines.append(f"- Detection boundary: mean recall first fell below 0.90 at malicious fraction {failed['malicious_client_fraction']:.2f} (recall {failed['final_recall_mean']:.4f}).")
         else: lines.append(f"- Detection boundary: mean recall remained at least 0.90 through the largest completed malicious fraction ({boundary[-1]['malicious_client_fraction']:.2f}).")
+    ablation = [x for x in headline if x["method"] in ("antiflipper_cc", "antiflipper", "cc_only") and "final_accuracy_mean" in x]
+    for row in sorted(ablation, key=lambda x: (x["dataset"], x["distribution"], x["method"])):
+        lines.append(f"- Ablation {row['dataset']} {row['distribution']} {row['method']}: accuracy {row['final_accuracy_mean']:.4f} ± {row.get('final_accuracy_std', 0):.4f}, recall {row.get('final_recall_mean', float('nan')):.4f}, FPR {row.get('final_fpr_mean', float('nan')):.4f}.")
     adaptive = [x for x in aggregate if x["experiment"] == "A7_adaptive_report" and "final_recall_mean" in x]
     for row in sorted(adaptive, key=lambda x: x["method"]):
         lines.append(f"- Adaptive report-faking attacker: {row['method']} recall {row['final_recall_mean']:.4f}, final accuracy {row.get('final_accuracy_mean', float('nan')):.4f}.")

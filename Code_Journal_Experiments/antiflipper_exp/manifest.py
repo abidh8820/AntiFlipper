@@ -15,9 +15,14 @@ SENSITIVITY_SEEDS = (101, 113, 127)
 # Reduced matrix (v2, Nov 2026). Rationale: reviewers asked for multi-seed statistics,
 # FLTrust, ratio/heterogeneity sweeps, sensitivity, and an adaptive report-faking
 # attacker. They did not ask for every legacy baseline under every setting.
-CIFAR_HEADLINE_METHODS = ("antiflipper", "antiflipper_cc", "fedavg", "median", "multi_krum", "flame", "lfighter", "fltrust")
-MNIST_HEADLINE_METHODS = ("antiflipper", "fedavg", "lfighter", "fltrust")
-SWEEP_METHODS = ("antiflipper", "fedavg", "lfighter", "fltrust")
+# AntiFLipper-CC is the proposed method; plain AntiFLipper (reports only) and cc_only
+# (cross-check only) are its two halves, kept to show what each part contributes.
+CIFAR_HEADLINE_METHODS = ("antiflipper_cc", "antiflipper", "cc_only", "fedavg", "median", "multi_krum", "flame", "lfighter", "fltrust")
+MNIST_HEADLINE_METHODS = ("antiflipper_cc", "antiflipper", "fedavg", "lfighter", "fltrust")
+SWEEP_METHODS = ("antiflipper_cc", "antiflipper", "fedavg", "lfighter", "fltrust")
+ABLATION_METHODS = ("antiflipper_cc", "antiflipper", "cc_only")
+# Threat model bound is 40%; 0.4 itself is the A1 headline operating point.
+RATIO_SWEEP = (0.1, 0.2, 0.3)
 LEGACY_BASELINES = ("trimmed_mean", "foolsgold", "tolpegin")
 # Tags are part of the config hash; A1 keeps its v1 tags so completed runs keep their ids.
 HEADLINE_TAGS = ("tier2", "headline")
@@ -40,6 +45,7 @@ def smoke_jobs() -> list[ExperimentConfig]:
     return [
         ExperimentConfig(experiment="smoke", method="antiflipper", **common),
         ExperimentConfig(experiment="smoke", method="antiflipper_cc", report_strategy="clean_labels", **common),
+        ExperimentConfig(experiment="smoke", method="cc_only", **common),
         ExperimentConfig(experiment="smoke", method="lfighter", **common),
     ]
 
@@ -62,38 +68,41 @@ def core_jobs() -> list[ExperimentConfig]:
         jobs.append(replace(base("CIFAR10", "NON_IID", method, seed, "A1_headline"), tags=HEADLINE_TAGS))
 
     # P1 / A7: adaptive attacker that reports accuracy on its clean labels.
-    # Baselines do not use reports, so their matched runs are the A1 jobs above.
-    for method, seed in itertools.product(("antiflipper", "antiflipper_cc"), SEEDS):
+    # Baselines and cc_only ignore reports, so their matched runs are the A1 jobs above.
+    for method, seed in itertools.product(("antiflipper_cc", "antiflipper"), SEEDS):
         jobs.append(replace(base("CIFAR10", "NON_IID", method, seed, "A7_adaptive_report"), report_strategy="clean_labels", tags=("P1", "adaptive")))
 
-    # P2 / A3: malicious-ratio boundary (0.4 is A1; 0.0 is the A2 alpha=1 clean control).
-    for method, ratio, seed in itertools.product(SWEEP_METHODS, (0.2, 0.3, 0.5), SEEDS):
-        jobs.append(replace(base("CIFAR10", "NON_IID", method, seed, "A3_malicious_ratio"), malicious_client_fraction=ratio, tags=("P2", "boundary")))
-
     # P2 / A2: clean false-positive stress test under heterogeneity (no attackers).
-    for method, alpha, seed in itertools.product(("antiflipper", "antiflipper_cc"), (0.1, 0.5, 1.0), SEEDS):
+    # This is where the cross-check could hurt honest skewed clients, so all three variants.
+    for method, alpha, seed in itertools.product(ABLATION_METHODS, (0.1, 0.5, 1.0), SEEDS):
         jobs.append(replace(base("CIFAR10", "NON_IID", method, seed, "A2_clean_heterogeneity"), dirichlet_alpha=alpha, malicious_client_fraction=0.0, tags=("P2", "clean-control")))
 
     # P2 / A2b: attacked, extreme heterogeneity (alpha=1.0 is A1).
-    for method, seed in itertools.product(SWEEP_METHODS, SEEDS):
+    for method, seed in itertools.product(SWEEP_METHODS + ("cc_only",), SEEDS):
         jobs.append(replace(base("CIFAR10", "NON_IID", method, seed, "A2_attacked_heterogeneity"), dirichlet_alpha=0.1, tags=("P2", "heterogeneity")))
+
+    # P2 / A3: malicious-ratio sweep up to the 40% threat-model bound (0.4 is A1;
+    # 0.0 is the A2 alpha=1 clean control).
+    for method, ratio, seed in itertools.product(SWEEP_METHODS, RATIO_SWEEP, SEEDS):
+        jobs.append(replace(base("CIFAR10", "NON_IID", method, seed, "A3_malicious_ratio"), malicious_client_fraction=ratio, tags=("P2", "boundary")))
 
     # P3 / A1: CIFAR-10 IID headline.
     for method, seed in itertools.product(CIFAR_HEADLINE_METHODS, SEEDS):
-        if method == "antiflipper_cc": continue
+        if method == "cc_only": continue
         jobs.append(replace(base("CIFAR10", "IID", method, seed, "A1_headline"), tags=HEADLINE_TAGS))
 
     # P3 / A1: MNIST (secondary dataset; 6 IID jobs already completed under v1).
     for distribution, method, seed in itertools.product(("IID", "NON_IID"), MNIST_HEADLINE_METHODS, SEEDS):
         jobs.append(replace(base("MNIST", distribution, method, seed, "A1_headline"), tags=HEADLINE_TAGS))
 
-    # P3 / A5: one-factor sensitivity of the two thresholds reviewers asked about,
-    # with matched no-attack controls, on held-out seeds.
+    # P3 / A5: one-factor sensitivity of the proposed method's thresholds (rho, counter,
+    # consistency z), with matched no-attack controls, on held-out seeds.
     variants = [{}]
     variants += [{"rho_threshold": x, "notes": f"rho={x}"} for x in (0.025, 0.1)]
     variants += [{"counter_threshold": x, "notes": f"counter={x}"} for x in (3, 9)]
+    variants += [{"consistency_z": x, "notes": f"z={x}"} for x in (2.0, 3.0)]
     for variant, seed, ratio in itertools.product(variants, SENSITIVITY_SEEDS, (0.0, 0.4)):
-        cfg = base("MNIST", "NON_IID", "antiflipper", seed, "A5_sensitivity")
+        cfg = base("MNIST", "NON_IID", "antiflipper_cc", seed, "A5_sensitivity")
         jobs.append(replace(cfg, malicious_client_fraction=ratio, tags=("P3", "validation", "clean-control" if ratio == 0 else "attack"), **({"notes": "default"} | variant)))
     return _dedupe(jobs)
 
@@ -101,7 +110,8 @@ def core_jobs() -> list[ExperimentConfig]:
 def optional_jobs() -> list[ExperimentConfig]:
     jobs: list[ExperimentConfig] = []
     # A4: true partial-example label flipping (1.0 is A1).
-    for method, fraction, seed in itertools.product(("antiflipper", "antiflipper_cc", "lfighter", "fltrust"), (0.25, 0.5, 0.75), SEEDS):
+    # Partial flips move the last layer less, so this stresses the cross-check most.
+    for method, fraction, seed in itertools.product(ABLATION_METHODS + ("lfighter", "fltrust"), (0.25, 0.5, 0.75), SEEDS):
         jobs.append(replace(base("CIFAR10", "NON_IID", method, seed, "A4_partial_flip"), label_poison_fraction=fraction, tags=("P4",)))
     # A6: ablations of AntiFLipper design choices.
     variants = (

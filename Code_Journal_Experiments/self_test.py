@@ -4,8 +4,8 @@ from pathlib import Path
 
 from antiflipper_exp.manifest import build
 
-CORE_JOBS = 171
-FULL_JOBS = 237
+CORE_JOBS = 219
+FULL_JOBS = 294
 
 # Completed under the v1 manifest; the v2 manifest must keep their job ids so the
 # launcher skips them instead of re-running.
@@ -26,6 +26,7 @@ def main() -> None:
     for jobs in (core, full, build("smoke")):
         assert len({job.job_id for job in jobs}) == len(jobs)
         for job in jobs: job.validate()
+        assert max(job.malicious_client_fraction for job in jobs) <= 0.4, "threat model caps attackers at 40%"
     ids = {job.job_id for job in core}
     missing = COMPLETED_V1 - ids
     assert not missing, f"completed v1 jobs no longer in manifest: {missing}"

@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader, Dataset, Subset
 
 from .aggregators import AggregatorState, aggregate, update_consistency
 from .attacks import PartiallyPoisonedDataset
-from .config import ANTIFLIPPER_METHODS, ExperimentConfig, LABEL_MAP
+from .config import ANTIFLIPPER_METHODS, CONSISTENCY_METHODS, REPORT_METHODS, ExperimentConfig, LABEL_MAP
 
 # Methods that make an explicit per-round keep/drop decision (zero weight = flagged).
 # FedAvg, Median and Trimmed Mean never classify clients, so they get no detection metrics.
@@ -199,11 +199,13 @@ def _update_trust(
     forced_flags = forced_flags or set()
     if not reports:
         raise RuntimeError("No eligible accuracy reports")
-    average = float(np.mean(list(reports.values())))
-    for client_id, accuracy in reports.items():
-        difference = accuracy - average
-        magnitude = abs(difference) if cfg.trust_update == "linear" else difference * difference
-        trust[client_id] = max(0.0, trust[client_id] + (cfg.eta * magnitude if difference >= 0 else -cfg.eta * magnitude))
+    uses_reports = cfg.method in REPORT_METHODS
+    if uses_reports:
+        average = float(np.mean(list(reports.values())))
+        for client_id, accuracy in reports.items():
+            difference = accuracy - average
+            magnitude = abs(difference) if cfg.trust_update == "linear" else difference * difference
+            trust[client_id] = max(0.0, trust[client_id] + (cfg.eta * magnitude if difference >= 0 else -cfg.eta * magnitude))
     _normalize_trust(trust, excluded)
 
     if round_index < cfg.grace_rounds:
@@ -211,7 +213,10 @@ def _update_trust(
     n_eligible = len(reports)
     newly_excluded: set[int] = set()
     for client_id in reports:
-        below = (n_eligible * trust[client_id] < cfg.rho_threshold) if cfg.threshold_mode == "relative" else (trust[client_id] < cfg.absolute_threshold)
+        if uses_reports:
+            below = (n_eligible * trust[client_id] < cfg.rho_threshold) if cfg.threshold_mode == "relative" else (trust[client_id] < cfg.absolute_threshold)
+        else:
+            below = False
         below = below or client_id in forced_flags
         if cfg.counter_mode == "none":
             counters[client_id] = cfg.counter_threshold if below else 0
@@ -340,10 +345,10 @@ def run_experiment(
             # timed so AntiFLipper's reported cost is not just the weighted average.
             defense_started = time.perf_counter()
             inconsistent_ids: list[int] = []
-            if cfg.method == "antiflipper_cc":
+            if cfg.method in CONSISTENCY_METHODS:
                 _, inconsistent = update_consistency([x.state for x in client_results], global_cpu, cfg.consistency_z)
                 inconsistent_ids = [x.client_id for x, bad in zip(client_results, inconsistent) if bad]
-                if inconsistent_ids:
+                if inconsistent_ids and cfg.method in REPORT_METHODS:
                     # A report that disagrees with the client's own update is not believed:
                     # it is replaced with the round's worst report before the trust update.
                     floor = min(reports.values())
@@ -449,7 +454,7 @@ def run_experiment(
             # Per-client upload per round: full model (float32) for everyone, plus one
             # float32 accuracy scalar for AntiFLipper variants.
             "model_parameters": parameter_count,
-            "upload_bytes_per_client_round": model_bytes + (4 if cfg.method in ANTIFLIPPER_METHODS else 0),
+            "upload_bytes_per_client_round": model_bytes + (4 if cfg.method in REPORT_METHODS else 0),
             "final_surviving_clients": cfg.num_clients - len(excluded),
             "mean_round_seconds": float(np.mean([x["round_seconds"] for x in rows])),
             "total_seconds": time.perf_counter() - run_started, "attackers": sorted(attackers), "excluded": sorted(excluded),

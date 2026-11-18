@@ -38,3 +38,16 @@ Each entry: date, what was discussed/done, decisions, and next steps.
 - Git hygiene: added `Code_Journal_Experiments/.gitignore` (pycache, locks, checkpoints, zips); untracked pycache and lock. `To run.txt` was rewritten for the GPU machine (path `C:\Projeccts\AntiFlipper`).
 - Committed and pushed branch `reduced-matrix-2026` to origin. Nothing has been run on GPU yet.
 - **Next:** user pulls on the GPU device and runs `run_all.cmd core 2`; then the paper revision.
+
+## 2026-11-18 (session 5)
+
+- User decisions:
+  - **Threat model caps malicious clients at 40%**; never sweep above it.
+  - "Do whatever gets it accepted." Code changes are delegated to Claude; the user only runs on GPU.
+- Added the `cc_only` ablation (cross-check only, reports ignored, uniform weights). **AntiFLipper-CC is now the proposed method**; AntiFLipper and cc_only are its two halves. Reason: the cross-check is in the LFighter/FLAME family, so the paper must show that the combination beats each part.
+- Manifest: core 219, full 294. The ratio sweep is {0.1, 0.2, 0.3} (0.4 = headline); `validate()` rejects anything above 0.4. Sensitivity now runs on CC and adds `consistency_z` {2, 3}. cc_only is in the headline, clean/attacked heterogeneity, and partial flip.
+- Open risks to check first in the results:
+  - CC false positives at Dirichlet 0.1 (A2).
+  - Whether cc_only ≈ CC; if so, the accuracy report adds little.
+  - Old paper numbers may shrink under multi-seed final-accuracy reporting.
+- Pushed `reduced-matrix-2026`.

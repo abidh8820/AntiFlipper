@@ -9,18 +9,18 @@ cd Code_Journal_Experiments
 # point to the CUDA python if it is not the active one
 $env:ANTIFLIPPER_PYTHON = "C:\path\to\gpu-env\python.exe"
 
-# 1) sanity: must print "Manifest validation passed: core=171 ... 6 completed"
+# 1) sanity: must print "Manifest validation passed: core=219 ... 6 completed"
 & $env:ANTIFLIPPER_PYTHON self_test.py
 # 2) pipeline smoke test (CPU-sized, ~1 min)
 .\run_all.cmd smoke
 
-# Terminal 1: run core (171 jobs, priority order P1 -> P3). 2nd arg = parallel workers.
+# Terminal 1: run core (219 jobs, priority order P1 -> P3). 2nd arg = parallel workers.
 .\run_all.cmd core 2
 
 # Terminal 2: monitor
 .\monitor.cmd core
 
-# Optional afterwards: full profile (+66 jobs)
+# Optional afterwards: full profile (+75 jobs)
 .\run_all.cmd full 2
 
 Ctrl+C is safe; re-run the same command to resume.
