@@ -54,6 +54,39 @@ The first CC version only replaced the report. In a sanity run (MNIST non-IID, 1
 too little: 4/4 attackers were flagged every round, but none were excluded. Flagging toward the counter fixed this
 (4/4 excluded, FPR 0, with both honest and report-faking attackers).
 
+## What every job records
+
+`results/<profile>/<job>/`:
+
+| File | Content |
+|---|---|
+| `config.json` | full configuration |
+| `partition_metadata.json` | client sizes, index hashes, attacker ids, FLTrust root set |
+| `round_metrics.csv` | one row per round (below) |
+| `client_history.csv` | one row per client per round: attacker, selected, excluded, raw and effective report, consistency similarity, inconsistent flag, trust, counter, aggregation weight, local loss |
+| `latest_detection.json` | current trust, counters, exclusions |
+| `summary.json` | per-job aggregates (below) |
+| `console.log`, `error.txt`, `state.json` | logs and status |
+
+Per round:
+- **Accuracy:** test accuracy, loss, ASR, macro and worst class accuracy, mean local loss.
+- **Detection:** cumulative and per-round TP/FP/FN/TN, precision, recall, F1 and FPR; excluded and aggregated clients; inconsistent reports; mean detection round.
+- **Server time:** pre-aggregation defense (trust update and cross-check), aggregation, total defense, FLTrust root training, test evaluation, full round.
+- **Client time:** report evaluation and local training (mean and max), evaluation overhead (eval/train), evaluation samples.
+- **Memory:** peak GPU allocated and reserved MB, peak process RSS MB (the server aggregates on CPU).
+- **Communication:** download and upload bytes this round.
+
+Per job (`summary.json`):
+- final and last-10-round accuracy, accuracy AUC, final ASR
+- final and mean per-round detection metrics; honest vs. attacker exclusions; mean and full detection round; first honest exclusion
+- means of every timing above, plus maxima of client times
+- peak memory, total upload and download bytes, parameter count, total wall time
+- device, torch version, platform
+
+Profile-level: `results/<profile>/environment/` (GPU, CUDA, `pip freeze`), `analysis/<profile>/` (mean ± std ± 95% CI across seeds, plots, REPORT.md), and `analysis/<profile>/timing/` (matched-N aggregation benchmark).
+
+Jobs that ran before a metric was added lack its column; analysis skips missing values.
+
 ## Metrics added in v2
 
 - Per-round detection (`round_precision/recall/f1/fpr`) for every method that drops clients (zero weight), so

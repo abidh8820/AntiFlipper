@@ -174,6 +174,45 @@ def train_local(
                         eval_seconds, train_seconds, len(eval_data))
 
 
+CLIENT_HISTORY_FIELDS = (
+    "round", "client", "attacker", "selected", "excluded", "raw_report", "effective_report",
+    "consistency_similarity", "inconsistent", "trust", "counter", "aggregation_weight", "local_loss",
+)
+
+
+def _append_client_history(path: Path, rows: list[dict[str, Any]]) -> None:
+    new_file = not path.exists() or path.stat().st_size == 0
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CLIENT_HISTORY_FIELDS, restval="")
+        if new_file: writer.writeheader()
+        writer.writerows(rows)
+
+
+def _truncate_client_history(path: Path, start_round: int) -> None:
+    if not path.exists():
+        return
+    with path.open(newline="", encoding="utf-8") as handle:
+        kept = [row for row in csv.DictReader(handle) if row.get("round", "").isdigit() and int(row["round"]) < start_round]
+    temporary = path.with_suffix(".tmp")
+    with temporary.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CLIENT_HISTORY_FIELDS, restval="", extrasaction="ignore")
+        writer.writeheader(); writer.writerows(kept)
+    os.replace(temporary, path)
+
+
+def _peak_rss_mb() -> float | str:
+    try:
+        import resource  # POSIX: ru_maxrss is KiB on Linux
+        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    except ImportError:
+        try:
+            import psutil
+            info = psutil.Process().memory_info()
+            return getattr(info, "peak_wset", info.rss) / 2**20
+        except Exception:
+            return ""
+
+
 def _sync(device: torch.device) -> None:
     if device.type == "cuda":
         torch.cuda.synchronize(device)
@@ -387,6 +426,11 @@ def run_experiment(
         _write_rows(metrics_path, rows, durable=start_round == cfg.rounds)
         print(f"Resuming {cfg.job_id} from checkpoint after round {start_round}/{cfg.rounds}")
 
+    history_path = job_dir / "client_history.csv"
+    # Drop history rows of rounds that will be re-run (written after the last checkpoint).
+    _truncate_client_history(history_path, start_round)
+    model_bytes = 4 * sum(v.numel() for v in model.state_dict().values() if torch.is_floating_point(v))
+
     run_started = time.perf_counter()
     try:
         for round_index in range(start_round, cfg.rounds):
@@ -408,12 +452,15 @@ def run_experiment(
                 client_results.append(train_local(cfg, model, global_cpu, data.clients[client_id], client_id, round_index, attacked, device))
 
             reports = {x.client_id: x.reported_accuracy for x in client_results}
+            raw_reports = dict(reports)
+            similarities: dict[int, float] = {}
             # Server-side defense work before aggregation (trust update, cross-check) is
             # timed so AntiFLipper's reported cost is not just the weighted average.
             defense_started = time.perf_counter()
             inconsistent_ids: list[int] = []
             if cfg.method in CONSISTENCY_METHODS:
-                _, inconsistent = update_consistency([x.state for x in client_results], global_cpu, cfg.consistency_z)
+                similarity_values, inconsistent = update_consistency([x.state for x in client_results], global_cpu, cfg.consistency_z)
+                similarities = {x.client_id: float(v) for x, v in zip(client_results, similarity_values)}
                 inconsistent_ids = [x.client_id for x, bad in zip(client_results, inconsistent) if bad]
                 if inconsistent_ids and cfg.method in REPORT_METHODS:
                     # A report that disagrees with the client's own update is not believed:
@@ -450,7 +497,9 @@ def run_experiment(
             if device.type == "cuda": torch.cuda.synchronize()
             aggregation_seconds = time.perf_counter() - aggregation_started
             model.load_state_dict(new_state)
+            _sync(device); test_started = time.perf_counter()
             test = evaluate(model, data.test, cfg.test_batch_size, device)
+            _sync(device); test_eval_seconds = time.perf_counter() - test_started
             confusion = _confusion(excluded if cfg.method in ANTIFLIPPER_METHODS else set(), attackers, cfg.num_clients)
             # Round-level decision for every detecting method: clients given zero weight
             # this round, plus (for AntiFLipper) clients already excluded.
@@ -469,8 +518,18 @@ def run_experiment(
                 "client_train_seconds": float(np.mean([x.train_seconds for x in client_results])),
                 "client_eval_overhead": float(np.sum([x.eval_seconds for x in client_results]) / max(np.sum([x.train_seconds for x in client_results]), 1e-12)),
                 "client_eval_samples": float(np.mean([x.eval_samples for x in client_results])),
+                "client_eval_seconds_max": float(np.max([x.eval_seconds for x in client_results])),
+                "client_train_seconds_max": float(np.max([x.train_seconds for x in client_results])),
                 # Peak GPU memory of this worker process during the round (one process per job).
                 "peak_gpu_memory_mb": torch.cuda.max_memory_allocated(device) / 2**20 if device.type == "cuda" else "",
+                "peak_gpu_reserved_mb": torch.cuda.max_memory_reserved(device) / 2**20 if device.type == "cuda" else "",
+                # Server aggregation runs on CPU: peak resident memory of the process so far.
+                "peak_process_rss_mb": _peak_rss_mb(),
+                # Communication: every selected client downloads the global model and uploads
+                # its update (+4-byte accuracy scalar for report-based methods).
+                "download_bytes": len(selected) * model_bytes,
+                "upload_bytes": len(selected) * (model_bytes + (4 if cfg.method in REPORT_METHODS else 0)),
+                "test_eval_seconds": test_eval_seconds,
                 "selected_clients": len(selected), "aggregated_clients": len(admitted), "excluded_clients": len(excluded),
                 "attacked_client_rounds": sum(x.attacked for x in client_results),
                 "poisoned_examples": sum(x.poisoned_examples for x in client_results),
@@ -487,6 +546,18 @@ def run_experiment(
                 "mean_detection_round": float(np.mean(malicious_delays)) if malicious_delays else "",
             }
             rows.append(row)
+            # One row per client per round, for trust/report/similarity trajectory plots.
+            local_loss = {x.client_id: x.local_loss for x in client_results}
+            weight_of = {x.client_id: float(w) for x, w in zip(admitted, weights_array)} if len(weights_array) == len(admitted) else {}
+            _append_client_history(history_path, [{
+                "round": round_index, "client": i, "attacker": int(i in attackers),
+                "selected": int(i in reports), "excluded": int(i in excluded),
+                "raw_report": raw_reports.get(i, ""), "effective_report": reports.get(i, ""),
+                "consistency_similarity": similarities.get(i, ""), "inconsistent": int(i in inconsistent_ids),
+                "trust": trust[i] if cfg.method in ANTIFLIPPER_METHODS else "",
+                "counter": counters[i] if cfg.method in ANTIFLIPPER_METHODS else "",
+                "aggregation_weight": weight_of.get(i, 0.0), "local_loss": local_loss.get(i, ""),
+            } for i in range(cfg.num_clients)])
             _write_rows(metrics_path, rows, durable=round_index + 1 == cfg.rounds)
             (job_dir / "latest_detection.json").write_text(json.dumps({
                 "attackers": sorted(attackers), "excluded": sorted(excluded), "detection_round": detection_round,
@@ -501,6 +572,10 @@ def run_experiment(
         def _mean(key: str) -> float | None:
             values = [float(x[key]) for x in rows if x.get(key, "") != ""]
             return float(np.mean(values)) if values else None
+
+        def _max(key: str) -> float | None:
+            values = [float(x[key]) for x in rows if x.get(key, "") != ""]
+            return max(values) if values else None
 
         detecting = cfg.method in DETECTING_METHODS
         # AntiFLipper's final decision is its cumulative exclusion set; per-round
@@ -537,7 +612,19 @@ def run_experiment(
             "mean_client_eval_seconds": _mean("client_eval_seconds"),
             "mean_client_train_seconds": _mean("client_train_seconds"),
             "mean_client_eval_overhead": _mean("client_eval_overhead"),
-            "peak_gpu_memory_mb": max((float(x["peak_gpu_memory_mb"]) for x in rows if x.get("peak_gpu_memory_mb", "") != ""), default=None),
+            "peak_gpu_memory_mb": _max("peak_gpu_memory_mb"),
+            "peak_gpu_reserved_mb": _max("peak_gpu_reserved_mb"),
+            "peak_process_rss_mb": _max("peak_process_rss_mb"),
+            "max_client_eval_seconds": _max("client_eval_seconds_max"),
+            "max_client_train_seconds": _max("client_train_seconds_max"),
+            "mean_test_eval_seconds": _mean("test_eval_seconds"),
+            "total_upload_bytes": sum(float(x.get("upload_bytes") or 0) for x in rows),
+            "total_download_bytes": sum(float(x.get("download_bytes") or 0) for x in rows),
+            # Detection delay: mean exclusion round over caught attackers, and the first
+            # round by which every attacker was excluded (None if never).
+            "mean_detection_round": float(np.mean([detection_round[i] for i in attackers if i in detection_round])) if any(i in detection_round for i in attackers) else None,
+            "full_detection_round": max(detection_round[i] for i in attackers) if attackers and all(i in detection_round for i in attackers) else None,
+            "first_honest_exclusion_round": min((r for i, r in detection_round.items() if i not in attackers), default=None),
             "total_seconds": time.perf_counter() - run_started, "attackers": sorted(attackers), "excluded": sorted(excluded),
             "detection_round": detection_round, "device": str(device), "torch_version": torch.__version__, "platform": platform.platform(),
         }

@@ -15,7 +15,11 @@ METRICS = (
     "honest_excluded", "attackers_excluded", "final_surviving_clients",
     "mean_aggregation_seconds", "mean_defense_seconds", "mean_root_training_seconds", "mean_round_seconds",
     "upload_bytes_per_client_round",
-    "mean_client_eval_seconds", "mean_client_train_seconds", "mean_client_eval_overhead", "peak_gpu_memory_mb",
+    "mean_client_eval_seconds", "mean_client_train_seconds", "mean_client_eval_overhead",
+    "max_client_eval_seconds", "max_client_train_seconds", "mean_test_eval_seconds",
+    "peak_gpu_memory_mb", "peak_gpu_reserved_mb", "peak_process_rss_mb",
+    "total_upload_bytes", "total_download_bytes",
+    "mean_detection_round", "full_detection_round", "first_honest_exclusion_round", "total_seconds",
 )
 
 
