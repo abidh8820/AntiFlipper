@@ -52,3 +52,36 @@ Each entry: date, what was discussed/done, decisions, and next steps.
   - Old paper numbers may shrink under multi-seed final-accuracy reporting.
 - Pushed `reduced-matrix-2026`.
 - Saved a project-status memory. **Next:** the user runs `run_all.cmd core 2` on the GPU machine and sends back `analysis/core/REPORT.md`; then the 6–8 page paper revision.
+
+## 2026-11-18 (session 6)
+
+- Started the 219-job AntiFlipper core queue with two RTX 3090 workers on `NDAG-M-Lab`. Enabled the `antiflipper-core.service` user unit at boot and verified that the user manager has lingering enabled.
+- Made Linux launcher locks release on exit and synced checkpoint writes to disk. Fixed the CIFAR-10 ResNet BatchNorm crash on a one-image batch by using running statistics for that batch while keeping the example in training.
+- Verified automatic recovery with a forced service stop. Both workers loaded their saved rounds and wrote new checkpoints. Six jobs were complete, two running, and 211 waiting, including one interrupted job with a saved checkpoint.
+- Ran the existing PTPC cron watchdogs. The Guard queue has all 30 cell logs and a completed separability result. The local g14 queue is exhausted, with eight local logs and two placeholders delegated to `bio` whose results remain unverified.
+- **Next:** let the core service finish and review `analysis/core/REPORT.md`.
+
+## 2026-11-18 (session 7)
+
+- Added executable `Code_Journal_Experiments/monitor.sh` for live Linux monitoring and `--once` snapshots. The monitor refreshes in a Linux terminal and exits cleanly on Ctrl+C.
+- Verified both modes against the live core queue. At the time of the check, six jobs were complete and two workers were training.
+
+## 2026-11-18 (session 8)
+
+- Updated the Linux watch display to use the terminal’s alternate screen and clear it before each redraw. Verified a 10-second refresh and restoration of the original screen on Ctrl+C.
+
+## 2026-11-18 (session 9)
+
+- Checked the core ETA at 15:00 Dhaka time. Six of 219 jobs were complete and two workers were active. The monitor projected roughly nine days with continuous uptime, using live CIFAR-10 timing and historical MNIST timing from Windows runs.
+
+## 2026-11-18 (session 10)
+
+- Confirmed the interrupted core job is CIFAR-10 AntiFLipper-CC seed 31. It paused during the BatchNorm fix, and its checkpoint records two completed rounds. It is next in the queue behind seeds 7 and 19.
+
+## 2026-11-18 (session 11)
+
+- Confirmed two parallel core runs were active at 15:03 Dhaka time. Seeds 7 and 19 had completed 18 and 21 rounds, respectively.
+
+## 2026-11-18 (session 12)
+
+- Checked whether a third worker could speed up the core queue. The RTX 3090 showed 99–100% utilization across the sample while two AntiFlipper workers and another GPU workload were active. Kept the boot service at two workers because the GPU was already busy despite available VRAM.

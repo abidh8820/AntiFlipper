@@ -9,6 +9,7 @@ import random
 import time
 import traceback
 import hashlib
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -135,6 +136,7 @@ def train_local(
     reported_accuracy = evaluate(model, eval_data, cfg.test_batch_size, device)["accuracy"]
 
     model.train()
+    batch_norm_layers = [layer for layer in model.modules() if isinstance(layer, nn.BatchNorm2d)]
     optimizer = torch.optim.SGD(model.parameters(), lr=cfg.learning_rate, momentum=cfg.momentum, weight_decay=cfg.weight_decay)
     criterion = nn.CrossEntropyLoss()
     losses: list[float] = []
@@ -143,7 +145,16 @@ def train_local(
         for data, target in loader:
             data, target = data.to(device), torch.as_tensor(target, device=device, dtype=torch.long)
             optimizer.zero_grad(set_to_none=True)
+            # CIFAR-10 ResNet reaches 1×1 activations. A singleton batch can
+            # still train its weights using the BatchNorm running statistics.
+            singleton = len(target) == 1
+            if singleton:
+                for layer in batch_norm_layers:
+                    layer.eval()
             loss = criterion(model(data), target)
+            if singleton:
+                for layer in batch_norm_layers:
+                    layer.train()
             loss.backward()
             optimizer.step()
             losses.append(float(loss.detach()))
@@ -231,13 +242,32 @@ def _update_trust(
     _normalize_trust(trust, excluded)
 
 
-def _atomic_torch_save(value: Any, path: Path) -> None:
+def _sync_directory(path: Path) -> None:
+    if os.name == "posix":
+        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+@contextmanager
+def _durable_write(path: Path, mode: str, **kwargs: Any):
     temporary = path.with_suffix(path.suffix + ".tmp")
-    torch.save(value, temporary)
+    with temporary.open(mode, **kwargs) as handle:
+        yield handle
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(temporary, path)
+    _sync_directory(path.parent)
 
 
-def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
+def _atomic_torch_save(value: Any, path: Path) -> None:
+    with _durable_write(path, "wb") as handle:
+        torch.save(value, handle)
+
+
+def _write_rows(path: Path, rows: list[dict[str, Any]], durable: bool = False) -> None:
     temporary = path.with_suffix(".tmp")
     if not rows:
         temporary.write_text("", encoding="utf-8")
@@ -247,6 +277,9 @@ def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
         with temporary.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=fieldnames, restval="")
             writer.writeheader(); writer.writerows(rows)
+            if durable:
+                handle.flush()
+                os.fsync(handle.fileno())
     os.replace(temporary, path)
 
 
@@ -278,6 +311,7 @@ def run_experiment(
     stop_requested: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     cfg.validate(); job_dir.mkdir(parents=True, exist_ok=True)
+    _sync_directory(job_dir.parent)
     cfg.save(job_dir / "config.json")
     checkpoint_path = job_dir / "checkpoint.pt"
     metrics_path = job_dir / "round_metrics.csv"
@@ -320,7 +354,8 @@ def run_experiment(
         random.setstate(payload["python_rng"]); np.random.set_state(payload["numpy_rng"]); torch.set_rng_state(payload["torch_rng"])
         if torch.cuda.is_available() and payload.get("cuda_rng") is not None:
             torch.cuda.set_rng_state_all(payload["cuda_rng"])
-        _write_rows(metrics_path, rows)
+        _write_rows(metrics_path, rows, durable=start_round == cfg.rounds)
+        print(f"Resuming {cfg.job_id} from checkpoint after round {start_round}/{cfg.rounds}")
 
     run_started = time.perf_counter()
     try:
@@ -411,7 +446,8 @@ def run_experiment(
                 **{f"round_{k}": ("" if round_confusion is None else v) for k, v in (round_confusion or _confusion(set(), set(), 1)).items()},
                 "mean_detection_round": float(np.mean(malicious_delays)) if malicious_delays else "",
             }
-            rows.append(row); _write_rows(metrics_path, rows)
+            rows.append(row)
+            _write_rows(metrics_path, rows, durable=round_index + 1 == cfg.rounds)
             (job_dir / "latest_detection.json").write_text(json.dumps({
                 "attackers": sorted(attackers), "excluded": sorted(excluded), "detection_round": detection_round,
                 "trust": trust, "counters": counters,
@@ -460,8 +496,10 @@ def run_experiment(
             "total_seconds": time.perf_counter() - run_started, "attackers": sorted(attackers), "excluded": sorted(excluded),
             "detection_round": detection_round, "device": str(device), "torch_version": torch.__version__, "platform": platform.platform(),
         }
-        (job_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-        state_path.write_text(json.dumps({"status": "completed", "job_id": cfg.job_id, "finished_at": time.time()}, indent=2), encoding="utf-8")
+        with _durable_write(job_dir / "summary.json", "w", encoding="utf-8") as handle:
+            json.dump(summary, handle, indent=2)
+        with _durable_write(state_path, "w", encoding="utf-8") as handle:
+            json.dump({"status": "completed", "job_id": cfg.job_id, "finished_at": time.time()}, handle, indent=2)
         return summary
     except KeyboardInterrupt:
         state_path.write_text(json.dumps({"status": "interrupted", "job_id": cfg.job_id, "interrupted_at": time.time()}, indent=2), encoding="utf-8")

@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import shutil
+import sys
 import time
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -175,13 +176,27 @@ def main() -> int:
     parser.add_argument("--watch", action="store_true", help="refresh continuously")
     parser.add_argument("--interval", type=int, default=10, help="refresh interval in seconds")
     args = parser.parse_args()
-    while True:
-        if args.watch:
-            os.system("cls")
-        print(snapshot(args.profile), flush=True)
-        if not args.watch:
-            return 0
-        time.sleep(max(1, args.interval))
+    ansi_watch = args.watch and os.name != "nt"
+    alternate_screen = ansi_watch and sys.stdout.isatty()
+    if alternate_screen:
+        sys.stdout.write("\033[?1049h")
+    try:
+        while True:
+            frame = snapshot(args.profile)
+            if ansi_watch:
+                frame = "\033[2J\033[H" + frame
+            elif args.watch and sys.stdout.isatty():
+                os.system("cls")
+            print(frame, flush=True)
+            if not args.watch:
+                return 0
+            time.sleep(max(1, args.interval))
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        if alternate_screen:
+            sys.stdout.write("\033[?1049l")
+            sys.stdout.flush()
 
 
 if __name__ == "__main__":

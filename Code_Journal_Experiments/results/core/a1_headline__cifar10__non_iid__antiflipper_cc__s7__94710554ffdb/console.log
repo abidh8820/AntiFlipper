@@ -1,0 +1,5 @@
+[1/219] RUN a1_headline__cifar10__non_iid__antiflipper_cc__s7__94710554ffdb
+FAILED: ValueError('Expected more than 1 value per channel when training, got input size torch.Size([1, 512, 1, 1])')
+[1/219] RUN a1_headline__cifar10__non_iid__antiflipper_cc__s7__94710554ffdb
+[1/219] RUN a1_headline__cifar10__non_iid__antiflipper_cc__s7__94710554ffdb
+Resuming a1_headline__cifar10__non_iid__antiflipper_cc__s7__94710554ffdb from checkpoint after round 1/100

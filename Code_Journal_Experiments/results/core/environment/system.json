@@ -1,11 +1,11 @@
 {
-  "captured_at": "2026-09-08T19:11:10.115964+00:00",
-  "python": "3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]",
-  "executable": "C:\\Projeccts\\AntiFlipper\\Code_Journal_Experiments\\.venv\\Scripts\\python.exe",
-  "platform": "Windows-10-10.0.19045-SP0",
-  "experiment_workers": 1,
-  "torch": "2.14.0+cu126",
+  "captured_at": "2026-11-18T08:53:08.441169+00:00",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "executable": "/usr/bin/python3.12",
+  "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+  "experiment_workers": 2,
+  "torch": "2.8.0+cu128",
   "cuda_available": true,
-  "cuda_version": "12.6",
-  "gpu": "NVIDIA GeForce GTX 1050 Ti"
+  "cuda_version": "12.8",
+  "gpu": "NVIDIA GeForce RTX 3090"
 }

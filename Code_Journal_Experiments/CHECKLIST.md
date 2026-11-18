@@ -1,16 +1,16 @@
 # Experiment checklist — core
 
-Updated: 2026-11-18T06:45:40.969924+00:00
+Updated: 2026-11-18T08:53:08.692811+00:00
 
-Progress: **6/219 complete**, 0 failed, 0 interrupted, 0 running.
+Progress: **6/219 complete**, 0 failed, 1 interrupted, 2 running.
 
 A checked item has a valid completed state file. Re-running the launcher skips it. Interrupted jobs resume from `checkpoint.pt`.
 
 | Done | # | Experiment | Dataset | Split | Method | Seed | Status |
 |---|---:|---|---|---|---|---:|---|
-| [ ] | 1 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 7 | pending |
-| [ ] | 2 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 19 | pending |
-| [ ] | 3 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 31 | pending |
+| [ ] | 1 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 7 | running |
+| [ ] | 2 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 19 | running |
+| [ ] | 3 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 31 | interrupted |
 | [ ] | 4 | A1_headline | CIFAR10 | NON_IID | antiflipper | 7 | pending |
 | [ ] | 5 | A1_headline | CIFAR10 | NON_IID | antiflipper | 19 | pending |
 | [ ] | 6 | A1_headline | CIFAR10 | NON_IID | antiflipper | 31 | pending |

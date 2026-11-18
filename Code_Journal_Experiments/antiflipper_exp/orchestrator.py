@@ -140,6 +140,18 @@ def _profile_run_lock(profile: str):
     lock_root = ROOT / ".locks"
     lock_root.mkdir(parents=True, exist_ok=True)
     lock_path = lock_root / f"{profile}.lock"
+    if os.name == "posix":
+        # Keep the inode in place. The OS releases its lock on process exit or reboot.
+        import fcntl
+
+        with lock_path.open("a+b") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise RuntimeError(f"Another {profile!r} launcher is active") from exc
+            yield
+        return
+
     try:
         descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError as exc:
