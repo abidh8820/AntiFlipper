@@ -93,3 +93,29 @@ Each entry: date, what was discussed/done, decisions, and next steps.
 ## 2026-11-18 (session 12)
 
 - Checked whether a third worker could speed up the core queue. The RTX 3090 showed 99–100% utilization across the sample while two AntiFlipper workers and another GPU workload were active. Kept the boot service at two workers because the GPU was already busy despite available VRAM.
+
+## 2026-11-18 (updated runner resumed)
+
+- Re-enabled `antiflipper-core.service` at boot with lingering enabled and started the updated 219-job core queue with two GPU workers. The pulled progress summaries were older than the local checkpoints. Seeds 7 and 19 resumed from rounds 38 and 41, then saved rounds 40 and 43 with the new metrics.
+- Synced client history before writing each checkpoint and verified replay removes uncheckpointed entries. The live monitor now shows the latest round's average client training and report times. Verified screen clearing at 10 seconds and terminal restoration on Ctrl+C.
+- Per-client history starts when the updated runner takes over an existing checkpoint. Let the queue continue from its saved progress.
+
+## 2026-11-18 (new metric coverage)
+
+- Checked whether resuming covered the new instrumentation. Client history starts at round 39 for seed 7 and round 42 for seed 19. The six completed MNIST runs also lack the new client timings. Recommended a fresh core run if every round needs the new measurements, with existing results and checkpoints archived first.
+
+## 2026-11-18 (fresh core queue)
+
+- At the user's request, deleted the local previous core results, checkpoints, analysis, and packages and started all 219 core jobs from scratch at 15:27 Dhaka time. Verified both GPU workers wrote client history and durable checkpoints starting at round 1. Boot startup before login remains enabled.
+- Updated the monitor to estimate each active job and the full queue from recent round times, remaining rounds, and active workers. It flags datasets whose rates are still estimated from other datasets.
+
+## 2026-11-18 (boot and sleep behavior)
+
+- Verified the core service is active and enabled, systemd lingering is on, and the desktop's plugged-in idle action is set to do nothing. The service starts before login after Ubuntu boots. Screen lock leaves training active, while suspend pauses training until wake.
+
+- Clarified that signing out of GitHub has no effect on local training, monitoring, or checkpoint recovery. GitHub credentials are only relevant when accessing a remote that requires authentication.
+
+## 2026-11-18 (checkpoint cleanup)
+
+- Added cleanup after final outputs and completion state are saved. Unfinished jobs retain their checkpoint, and the launcher retries completed-job cleanup after an interruption. Verified retention, resume, and cleanup on a two-round synthetic job.
+- Reloaded the core service at safe round boundaries. Both GPU workers resumed from round 13, and boot startup remains enabled.

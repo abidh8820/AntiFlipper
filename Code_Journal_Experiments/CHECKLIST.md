@@ -1,16 +1,16 @@
 # Experiment checklist — core
 
-Updated: 2026-11-18T08:53:08.692811+00:00
+Updated: 2026-11-18T09:35:34.513308+00:00
 
-Progress: **6/219 complete**, 0 failed, 1 interrupted, 2 running.
+Progress: **0/219 complete**, 0 failed, 2 interrupted, 0 running.
 
 A checked item has a valid completed state file. Re-running the launcher skips it. Interrupted jobs resume from `checkpoint.pt`.
 
 | Done | # | Experiment | Dataset | Split | Method | Seed | Status |
 |---|---:|---|---|---|---|---:|---|
-| [ ] | 1 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 7 | running |
-| [ ] | 2 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 19 | running |
-| [ ] | 3 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 31 | interrupted |
+| [ ] | 1 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 7 | interrupted |
+| [ ] | 2 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 19 | interrupted |
+| [ ] | 3 | A1_headline | CIFAR10 | NON_IID | antiflipper_cc | 31 | pending |
 | [ ] | 4 | A1_headline | CIFAR10 | NON_IID | antiflipper | 7 | pending |
 | [ ] | 5 | A1_headline | CIFAR10 | NON_IID | antiflipper | 19 | pending |
 | [ ] | 6 | A1_headline | CIFAR10 | NON_IID | antiflipper | 31 | pending |
@@ -158,12 +158,12 @@ A checked item has a valid completed state file. Re-running the launcher skips i
 | [ ] | 148 | A1_headline | MNIST | IID | antiflipper_cc | 7 | pending |
 | [ ] | 149 | A1_headline | MNIST | IID | antiflipper_cc | 19 | pending |
 | [ ] | 150 | A1_headline | MNIST | IID | antiflipper_cc | 31 | pending |
-| [x] | 151 | A1_headline | MNIST | IID | antiflipper | 7 | completed |
-| [x] | 152 | A1_headline | MNIST | IID | antiflipper | 19 | completed |
-| [x] | 153 | A1_headline | MNIST | IID | antiflipper | 31 | completed |
-| [x] | 154 | A1_headline | MNIST | IID | fedavg | 7 | completed |
-| [x] | 155 | A1_headline | MNIST | IID | fedavg | 19 | completed |
-| [x] | 156 | A1_headline | MNIST | IID | fedavg | 31 | completed |
+| [ ] | 151 | A1_headline | MNIST | IID | antiflipper | 7 | pending |
+| [ ] | 152 | A1_headline | MNIST | IID | antiflipper | 19 | pending |
+| [ ] | 153 | A1_headline | MNIST | IID | antiflipper | 31 | pending |
+| [ ] | 154 | A1_headline | MNIST | IID | fedavg | 7 | pending |
+| [ ] | 155 | A1_headline | MNIST | IID | fedavg | 19 | pending |
+| [ ] | 156 | A1_headline | MNIST | IID | fedavg | 31 | pending |
 | [ ] | 157 | A1_headline | MNIST | IID | lfighter | 7 | pending |
 | [ ] | 158 | A1_headline | MNIST | IID | lfighter | 19 | pending |
 | [ ] | 159 | A1_headline | MNIST | IID | lfighter | 31 | pending |

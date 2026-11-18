@@ -1,2 +1,2 @@
-cd Desktop/AAR/AntiFlipper
+cd ~/Desktop/AAR/AntiFlipper
 ./Code_Journal_Experiments/monitor.sh

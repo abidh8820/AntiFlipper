@@ -1,10 +1,10 @@
 # AntiFLipper automated analysis
 
-Completed runs analyzed: **6**.
+Completed runs analyzed: **0**.
 
 ## Included experiment groups
 
-- A1_headline
+- None yet
 
 ## Interpretation notes
 
@@ -17,15 +17,8 @@ Completed runs analyzed: **6**.
 
 ## Automated findings
 
-- MNIST IID: best mean final accuracy was antiflipper (0.9872); AntiFLipper was 0.9872.
-- Ablation MNIST IID antiflipper: accuracy 0.9872 ± 0.0014, recall 1.0000, FPR 0.0000.
+- Insufficient completed experiment groups for automated comparisons.
 
-## Headline summary
-
-| Experiment | Dataset | Distribution | Method | Seeds | Final accuracy | Recall | FPR |
-|---|---|---|---|---:|---:|---:|---:|
-| A1_headline | MNIST | IID | fedavg | 3 | 0.0064 ± 0.0023 | 0.0000 | 0.0000 |
-| A1_headline | MNIST | IID | antiflipper | 3 | 0.9872 ± 0.0014 | 1.0000 | 0.0000 |
 
 ## Files
 

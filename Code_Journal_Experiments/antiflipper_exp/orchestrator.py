@@ -19,7 +19,7 @@ from typing import Any
 
 from .analysis import analyze
 from .config import ExperimentConfig
-from .engine import run_experiment
+from .engine import remove_completed_checkpoint, run_experiment
 from .manifest import build, load_manifest, save_manifest
 
 
@@ -200,6 +200,9 @@ def _run_manifest(manifest_path: Path, stop_on_error: bool = False, retry_failed
             job_dir = result_root / cfg.job_id
             current = job_status(job_dir)
             if current == "completed":
+                # Retry cleanup if the last launcher stopped after committing completion.
+                if (job_dir / "summary.json").is_file() and (job_dir / "round_metrics.csv").is_file():
+                    remove_completed_checkpoint(job_dir / "checkpoint.pt")
                 print(f"[{index}/{len(jobs)}] SKIP completed {cfg.job_id}")
                 continue
             if current == "failed" and not retry_failed:

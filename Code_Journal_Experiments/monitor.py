@@ -10,6 +10,7 @@ import time
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+from statistics import fmean
 
 ROOT = Path(__file__).resolve().parent
 
@@ -37,6 +38,8 @@ def folder_bytes(path: Path) -> int:
 def format_duration(seconds: float | None) -> str:
     if seconds is None or seconds < 0:
         return "unknown"
+    if seconds < 60:
+        return f"{round(seconds)}s"
     minutes = round(seconds / 60)
     if minutes < 60:
         return f"{minutes} min"
@@ -73,67 +76,76 @@ def snapshot(profile: str) -> str:
     jobs = manifest.get("jobs", [])
     result_root = ROOT / "results" / profile
     counts = Counter()
-    active: list[dict] = []
-    rates: dict[str, list[float]] = defaultdict(list)
+    unfinished = []
+    dataset_rates: dict[str, list[float]] = defaultdict(list)
+    method_rates: dict[tuple[str, str], list[float]] = defaultdict(list)
 
     for config in jobs:
         job_dir = result_root / job_id(config)
-        state = read_json(job_dir / "state.json")
-        status = state.get("status", "pending")
+        status = read_json(job_dir / "state.json").get("status", "pending")
         counts[status] += 1
         rows = metrics_for(job_dir)
-        if rows:
-            values = [float(row["round_seconds"]) for row in rows if row.get("round_seconds")]
-            if values:
-                rates[config.get("dataset", "unknown")].extend(values)
-        if status == "running":
-            active.append({"config": config, "state": state, "rows": rows, "job_dir": job_dir})
+        recent = [float(row["round_seconds"]) for row in rows[-10:] if row.get("round_seconds")]
+        dataset = config["dataset"]
+        method = config["method"]
+        if recent:
+            dataset_rates[dataset].extend(recent)
+            method_rates[dataset, method].extend(recent)
+        if status != "completed":
+            unfinished.append((config, status, rows, recent))
 
-    current_eta = None
-    total_eta = None
-    active_text = "No job is currently running.\n"
-    if active:
-        active_lines: list[str] = []
-        total_work_seconds = 0.0
-        fallback_values: list[float] = []
-        for item in active:
-            config = item["config"]
-            rows = item["rows"]
-            values = [float(row["round_seconds"]) for row in rows if row.get("round_seconds")]
-            average = sum(values) / len(values) if values else None
-            if values:
-                fallback_values.extend(values)
-            done_rounds = len(rows)
-            total_rounds = int(config.get("rounds", 0))
-            remaining_rounds = max(0, total_rounds - done_rounds)
-            current_eta = remaining_rounds * average if average is not None else None
-            if current_eta is not None:
-                total_work_seconds += current_eta
-            active_lines.append(
-                f"{config.get('experiment')} | {config.get('dataset')} {config.get('distribution')} | "
-                f"{config.get('method')} | seed {config.get('seed')}\n"
-                f"  Rounds: {done_rounds}/{total_rounds} ({100 * done_rounds / max(1, total_rounds):.1f}%)\n"
-                f"  Average round: {average:.1f}s\n"
-                f"  Remaining: {format_duration(current_eta)}"
-                if average is not None else
-                f"{config.get('experiment')} | {config.get('dataset')} | {config.get('method')}\n"
-                f"  Rounds: {done_rounds}/{total_rounds}\n"
-                f"  Average round: collecting data"
+    all_rates = [rate for rates in dataset_rates.values() for rate in rates]
+    estimated_work = []
+    active_lines = []
+    unmeasured_datasets = set()
+    for config, status, rows, recent in unfinished:
+        dataset = config["dataset"]
+        method = config["method"]
+        total_rounds = config["rounds"]
+        done_rounds = len(rows)
+        remaining_rounds = max(0, total_rounds - done_rounds)
+        dataset_sample = dataset_rates.get(dataset)
+        samples = recent or method_rates.get((dataset, method)) or dataset_sample or all_rates
+        average = fmean(samples) if samples else None
+        eta = remaining_rounds * average if average is not None else None
+        if eta is not None:
+            estimated_work.append(eta)
+            if remaining_rounds and not dataset_sample:
+                unmeasured_datasets.add(dataset)
+
+        if status != "running":
+            continue
+        latest = rows[-1] if rows else {}
+        client_eval = latest.get("client_eval_seconds")
+        client_train = latest.get("client_train_seconds")
+        client_timing = ""
+        if client_eval and client_train:
+            client_timing = (
+                f"\n  Last round per client: {float(client_train):.2f}s training, "
+                f"{float(client_eval):.2f}s accuracy report (averages)"
             )
-        active_text = "\n\n".join(active_lines) + "\n"
+        round_time = f"{average:.1f}s" if average is not None else "collecting data"
+        job_eta = format_duration(eta) if eta is not None else "waiting for round timing"
+        active_lines.append(
+            f"{config['experiment']} | {dataset} {config['distribution']} | {method} | seed {config['seed']}\n"
+            f"  Rounds: {done_rounds}/{total_rounds} ({100 * done_rounds / max(1, total_rounds):.1f}%)\n"
+            f"  Estimated round time: {round_time}\n"
+            f"  Estimated time left: {job_eta}{client_timing}"
+        )
 
-        for pending in jobs:
-            pending_dir = result_root / job_id(pending)
-            pending_state = read_json(pending_dir / "state.json").get("status", "pending")
-            if pending_state in {"completed", "running"}:
-                continue
-            dataset = pending.get("dataset", "unknown")
-            dataset_values = rates.get(dataset) or fallback_values
-            dataset_average = sum(dataset_values) / len(dataset_values) if dataset_values else None
-            if dataset_average is not None:
-                total_work_seconds += int(pending.get("rounds", 0)) * dataset_average
-        # Approximate wall time by sharing the remaining work among active workers.
-        total_eta = total_work_seconds / max(1, len(active))
+    active_text = "\n\n".join(active_lines) if active_lines else "No job is currently running."
+    if not unfinished and jobs:
+        queue_eta = "complete"
+    elif not active_lines:
+        queue_eta = "queue idle"
+    elif not estimated_work:
+        queue_eta = "waiting for the first timed round"
+    else:
+        # Workers share the queue, but a single job cannot use more than one worker.
+        total_eta = max(max(estimated_work), sum(estimated_work) / len(active_lines))
+        queue_eta = f"{format_duration(total_eta)} (rough estimate)"
+        if unmeasured_datasets:
+            queue_eta += f"\n  Using other datasets' timings for {', '.join(sorted(unmeasured_datasets))}."
 
     total = len(jobs)
     completed = counts.get("completed", 0)
@@ -148,8 +160,8 @@ def snapshot(profile: str) -> str:
         f"Jobs: {completed}/{total} complete ({progress:.1f}%) | "
         f"{counts.get('running', 0)} running | {counts.get('pending', 0)} pending | "
         f"{counts.get('failed', 0)} failed | {counts.get('interrupted', 0)} interrupted\n"
-        f"Current job:\n{active_text}"
-        f"Estimated total remaining: {format_duration(total_eta)} (rough estimate)\n"
+        f"Current jobs:\n{active_text}\n"
+        f"Estimated time left for all jobs: {queue_eta}\n"
         f"Stored results/checkpoints/archives: {format_bytes(tracked_bytes)}\n"
         f"Free space on {ROOT.anchor or 'drive'}: {format_bytes(usage.free)}\n"
         "\nPress Ctrl+C to close this monitor. It does not stop the experiment.\n"

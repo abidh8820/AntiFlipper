@@ -186,6 +186,9 @@ def _append_client_history(path: Path, rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=CLIENT_HISTORY_FIELDS, restval="")
         if new_file: writer.writeheader()
         writer.writerows(rows)
+        # Make the history durable before the checkpoint records this round.
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def _truncate_client_history(path: Path, start_round: int) -> None:
@@ -193,11 +196,9 @@ def _truncate_client_history(path: Path, start_round: int) -> None:
         return
     with path.open(newline="", encoding="utf-8") as handle:
         kept = [row for row in csv.DictReader(handle) if row.get("round", "").isdigit() and int(row["round"]) < start_round]
-    temporary = path.with_suffix(".tmp")
-    with temporary.open("w", newline="", encoding="utf-8") as handle:
+    with _durable_write(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=CLIENT_HISTORY_FIELDS, restval="", extrasaction="ignore")
         writer.writeheader(); writer.writerows(kept)
-    os.replace(temporary, path)
 
 
 def _peak_rss_mb() -> float | str:
@@ -334,6 +335,16 @@ def _durable_write(path: Path, mode: str, **kwargs: Any):
 def _atomic_torch_save(value: Any, path: Path) -> None:
     with _durable_write(path, "wb") as handle:
         torch.save(value, handle)
+
+
+def remove_completed_checkpoint(path: Path) -> None:
+    try:
+        path.unlink()
+        _sync_directory(path.parent)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        print(f"Could not clean up checkpoint {path}: {exc}")
 
 
 def _write_rows(path: Path, rows: list[dict[str, Any]], durable: bool = False) -> None:
@@ -632,7 +643,6 @@ def run_experiment(
             json.dump(summary, handle, indent=2)
         with _durable_write(state_path, "w", encoding="utf-8") as handle:
             json.dump({"status": "completed", "job_id": cfg.job_id, "finished_at": time.time()}, handle, indent=2)
-        return summary
     except KeyboardInterrupt:
         state_path.write_text(json.dumps({"status": "interrupted", "job_id": cfg.job_id, "interrupted_at": time.time()}, indent=2), encoding="utf-8")
         raise
@@ -640,3 +650,5 @@ def run_experiment(
         (job_dir / "error.txt").write_text(traceback.format_exc(), encoding="utf-8")
         state_path.write_text(json.dumps({"status": "failed", "job_id": cfg.job_id, "error": repr(exc), "failed_at": time.time()}, indent=2), encoding="utf-8")
         raise
+    remove_completed_checkpoint(checkpoint_path)
+    return summary

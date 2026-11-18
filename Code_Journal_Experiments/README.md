@@ -54,6 +54,8 @@ FLAME prefers the external `hdbscan` package used by the original implementation
 
 Each job saves a checkpoint after every completed communication round. You may stop with Ctrl+C, reboot, or close the terminal. Run the same command again; completed jobs are skipped and the interrupted job resumes at its next unfinished round.
 
+The runner removes a job's checkpoint after saving its final metrics and completion status. The results and client history remain available for analysis.
+
 Checkpoint contents include the model, trust values, counters, excluded clients, detection rounds, per-round rows, baseline memory, and Python/NumPy/PyTorch RNG states. A configuration hash is part of every job name, preventing an altered experiment from accidentally loading an incompatible checkpoint.
 
 `CHECKLIST.md` and `checklist.csv` are regenerated after each job. The machine-readable `state.json` inside each job is authoritative.
