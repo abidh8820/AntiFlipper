@@ -51,3 +51,4 @@ Each entry: date, what was discussed/done, decisions, and next steps.
   - Whether cc_only ≈ CC; if so, the accuracy report adds little.
   - Old paper numbers may shrink under multi-seed final-accuracy reporting.
 - Pushed `reduced-matrix-2026`.
+- Saved a project-status memory. **Next:** the user runs `run_all.cmd core 2` on the GPU machine and sends back `analysis/core/REPORT.md`; then the 6–8 page paper revision.
