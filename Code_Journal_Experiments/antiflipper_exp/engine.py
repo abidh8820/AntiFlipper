@@ -18,9 +18,13 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset, Subset
 
-from .aggregators import AggregatorState, aggregate
+from .aggregators import AggregatorState, aggregate, update_consistency
 from .attacks import PartiallyPoisonedDataset
-from .config import ExperimentConfig, LABEL_MAP
+from .config import ANTIFLIPPER_METHODS, ExperimentConfig, LABEL_MAP
+
+# Methods that make an explicit per-round keep/drop decision (zero weight = flagged).
+# FedAvg, Median and Trimmed Mean never classify clients, so they get no detection metrics.
+DETECTING_METHODS = ANTIFLIPPER_METHODS | {"multi_krum", "flame", "lfighter", "tolpegin", "fltrust", "foolsgold"}
 from .data import FederatedData, build_federated_data
 from .models import create_model
 
@@ -121,10 +125,13 @@ def train_local(
         poisoned_examples = poisoned.poisoned_examples
 
     # The report evaluates the pre-training global model using the same labels visible
-    # to local training in this client-round, matching the submitted method.
+    # to local training in this client-round, matching the submitted method. The
+    # adaptive "clean_labels" attacker instead reports accuracy on its unflipped labels,
+    # which is what an honest client with the same data would report.
     model = copy.deepcopy(model_template).to(device)
     model.load_state_dict(global_state)
-    eval_data = _evaluation_subset(training_data, cfg.eval_fraction, local_seed + 23)
+    report_source = dataset if (attacked and cfg.report_strategy == "clean_labels") else training_data
+    eval_data = _evaluation_subset(report_source, cfg.eval_fraction, local_seed + 23)
     reported_accuracy = evaluate(model, eval_data, cfg.test_batch_size, device)["accuracy"]
 
     model.train()
@@ -184,7 +191,12 @@ def _update_trust(
     excluded: set[int],
     round_index: int,
     detection_round: dict[int, int],
+    forced_flags: set[int] | None = None,
 ) -> None:
+    """forced_flags: clients whose report failed the AntiFLipper-CC cross-check this
+    round. They are flagged exactly as if their trust were below threshold, so the
+    same counter that tolerates transient non-IID deviations decides exclusion."""
+    forced_flags = forced_flags or set()
     if not reports:
         raise RuntimeError("No eligible accuracy reports")
     average = float(np.mean(list(reports.values())))
@@ -200,6 +212,7 @@ def _update_trust(
     newly_excluded: set[int] = set()
     for client_id in reports:
         below = (n_eligible * trust[client_id] < cfg.rho_threshold) if cfg.threshold_mode == "relative" else (trust[client_id] < cfg.absolute_threshold)
+        below = below or client_id in forced_flags
         if cfg.counter_mode == "none":
             counters[client_id] = cfg.counter_threshold if below else 0
         elif below:
@@ -224,8 +237,10 @@ def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
     if not rows:
         temporary.write_text("", encoding="utf-8")
     else:
+        # Union of keys: rows restored from an older checkpoint may lack newer columns.
+        fieldnames = list(dict.fromkeys(key for row in rows for key in row))
         with temporary.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, restval="")
             writer.writeheader(); writer.writerows(rows)
     os.replace(temporary, path)
 
@@ -321,33 +336,57 @@ def run_experiment(
                 client_results.append(train_local(cfg, model, global_cpu, data.clients[client_id], client_id, round_index, attacked, device))
 
             reports = {x.client_id: x.reported_accuracy for x in client_results}
-            if cfg.method == "antiflipper":
-                _update_trust(cfg, reports, trust, counters, excluded, round_index, detection_round)
+            # Server-side defense work before aggregation (trust update, cross-check) is
+            # timed so AntiFLipper's reported cost is not just the weighted average.
+            defense_started = time.perf_counter()
+            inconsistent_ids: list[int] = []
+            if cfg.method == "antiflipper_cc":
+                _, inconsistent = update_consistency([x.state for x in client_results], global_cpu, cfg.consistency_z)
+                inconsistent_ids = [x.client_id for x, bad in zip(client_results, inconsistent) if bad]
+                if inconsistent_ids:
+                    # A report that disagrees with the client's own update is not believed:
+                    # it is replaced with the round's worst report before the trust update.
+                    floor = min(reports.values())
+                    for client_id in inconsistent_ids:
+                        reports[client_id] = floor
+            if cfg.method in ANTIFLIPPER_METHODS:
+                _update_trust(cfg, reports, trust, counters, excluded, round_index, detection_round, set(inconsistent_ids))
                 admitted = [x for x in client_results if x.client_id not in excluded]
             else:
                 admitted = client_results
+            pre_aggregation_seconds = time.perf_counter() - defense_started
             if not admitted:
                 raise RuntimeError("No client updates remain for aggregation")
 
             root_state = None
+            root_training_seconds = 0.0
             if cfg.method == "fltrust":
                 if data.root is None:
                     raise RuntimeError("FLTrust root data missing")
+                root_started = time.perf_counter()
                 root_state = train_local(cfg, model, global_cpu, data.root, -1, round_index, False, device).state
+                root_training_seconds = time.perf_counter() - root_started
 
             if device.type == "cuda": torch.cuda.synchronize()
             aggregation_started = time.perf_counter()
             new_state, method_weights = aggregate(
                 cfg.method, [x.state for x in admitted], global_cpu, [x.client_id for x in admitted],
                 cfg.malicious_client_fraction, aggregator_state,
-                trust_weights=[trust[x.client_id] for x in admitted] if cfg.method == "antiflipper" else None,
+                trust_weights=[trust[x.client_id] for x in admitted] if cfg.method in ANTIFLIPPER_METHODS else None,
                 root_state=root_state, seed=cfg.seed + round_index,
             )
             if device.type == "cuda": torch.cuda.synchronize()
             aggregation_seconds = time.perf_counter() - aggregation_started
             model.load_state_dict(new_state)
             test = evaluate(model, data.test, cfg.test_batch_size, device)
-            confusion = _confusion(excluded if cfg.method == "antiflipper" else set(), attackers, cfg.num_clients)
+            confusion = _confusion(excluded if cfg.method in ANTIFLIPPER_METHODS else set(), attackers, cfg.num_clients)
+            # Round-level decision for every detecting method: clients given zero weight
+            # this round, plus (for AntiFLipper) clients already excluded.
+            weights_array = np.asarray(method_weights, dtype=float).reshape(-1)
+            flagged = {x.client_id for x, w in zip(admitted, weights_array) if w <= 1e-12} if len(weights_array) == len(admitted) else set()
+            if cfg.method in ANTIFLIPPER_METHODS:
+                flagged |= excluded
+            round_confusion = _confusion(flagged, attackers, cfg.num_clients) if cfg.method in DETECTING_METHODS else None
             malicious_delays = [detection_round[i] for i in attackers if i in detection_round]
             row = {
                 "round": round_index, **test,
@@ -356,9 +395,15 @@ def run_experiment(
                 "attacked_client_rounds": sum(x.attacked for x in client_results),
                 "poisoned_examples": sum(x.poisoned_examples for x in client_results),
                 "aggregation_seconds": aggregation_seconds,
+                "pre_aggregation_seconds": pre_aggregation_seconds,
+                "defense_seconds": pre_aggregation_seconds + aggregation_seconds,
+                "root_training_seconds": root_training_seconds,
                 "round_seconds": time.perf_counter() - round_started,
                 "mean_method_weight": float(np.mean(method_weights)),
+                "inconsistent_reports": len(inconsistent_ids),
+                "inconsistent_attackers": len(set(inconsistent_ids) & attackers),
                 **confusion,
+                **{f"round_{k}": ("" if round_confusion is None else v) for k, v in (round_confusion or _confusion(set(), set(), 1)).items()},
                 "mean_detection_round": float(np.mean(malicious_delays)) if malicious_delays else "",
             }
             rows.append(row); _write_rows(metrics_path, rows)
@@ -371,13 +416,41 @@ def run_experiment(
 
         final = rows[-1]
         last_window = rows[-min(10, len(rows)):]
+
+        def _mean(key: str) -> float | None:
+            values = [float(x[key]) for x in rows if x.get(key, "") != ""]
+            return float(np.mean(values)) if values else None
+
+        detecting = cfg.method in DETECTING_METHODS
+        # AntiFLipper's final decision is its cumulative exclusion set; per-round
+        # selectors (Krum, LFighter, FLTrust, ...) are judged on their last-round choice.
+        final_detection = (
+            {k: final[k] for k in ("precision", "recall", "f1", "fpr")} if cfg.method in ANTIFLIPPER_METHODS
+            else {k: final[f"round_{k}"] for k in ("precision", "recall", "f1", "fpr")} if detecting
+            else {k: None for k in ("precision", "recall", "f1", "fpr")}
+        )
+        parameter_count = sum(v.numel() for v in model.state_dict().values() if torch.is_floating_point(v))
+        model_bytes = 4 * parameter_count
         summary = {
             "job_id": cfg.job_id, "status": "completed", "config_hash": cfg.config_hash,
             "final_accuracy": final["accuracy"], "last10_accuracy_mean": float(np.mean([x["accuracy"] for x in last_window])),
             "last10_accuracy_std": float(np.std([x["accuracy"] for x in last_window], ddof=1)) if len(last_window) > 1 else 0.0,
             "final_asr": final["asr"], "accuracy_auc": float(np.mean([x["accuracy"] for x in rows])),
-            "final_precision": final["precision"], "final_recall": final["recall"], "final_f1": final["f1"], "final_fpr": final["fpr"],
+            "final_precision": final_detection["precision"], "final_recall": final_detection["recall"],
+            "final_f1": final_detection["f1"], "final_fpr": final_detection["fpr"],
+            "mean_round_precision": _mean("round_precision") if detecting else None,
+            "mean_round_recall": _mean("round_recall") if detecting else None,
+            "mean_round_f1": _mean("round_f1") if detecting else None,
+            "mean_round_fpr": _mean("round_fpr") if detecting else None,
+            "honest_excluded": len(excluded - attackers), "attackers_excluded": len(excluded & attackers),
             "mean_aggregation_seconds": float(np.mean([x["aggregation_seconds"] for x in rows])),
+            "mean_defense_seconds": _mean("defense_seconds"),
+            "mean_root_training_seconds": _mean("root_training_seconds"),
+            # Per-client upload per round: full model (float32) for everyone, plus one
+            # float32 accuracy scalar for AntiFLipper variants.
+            "model_parameters": parameter_count,
+            "upload_bytes_per_client_round": model_bytes + (4 if cfg.method in ANTIFLIPPER_METHODS else 0),
+            "final_surviving_clients": cfg.num_clients - len(excluded),
             "mean_round_seconds": float(np.mean([x["round_seconds"] for x in rows])),
             "total_seconds": time.perf_counter() - run_started, "attackers": sorted(attackers), "excluded": sorted(excluded),
             "detection_round": detection_round, "device": str(device), "torch_version": torch.__version__, "platform": platform.platform(),

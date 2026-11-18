@@ -1,15 +1,37 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from antiflipper_exp.manifest import build
+
+CORE_JOBS = 171
+FULL_JOBS = 237
+
+# Completed under the v1 manifest; the v2 manifest must keep their job ids so the
+# launcher skips them instead of re-running.
+COMPLETED_V1 = {
+    "a1_headline__mnist__iid__antiflipper__s7__4bc51d584b59",
+    "a1_headline__mnist__iid__antiflipper__s19__59b9f4b171d7",
+    "a1_headline__mnist__iid__antiflipper__s31__1fe5433c6092",
+    "a1_headline__mnist__iid__fedavg__s7__632dc8976de7",
+    "a1_headline__mnist__iid__fedavg__s19__7bc548c7e8c7",
+    "a1_headline__mnist__iid__fedavg__s31__56d6dbfd6a89",
+}
 
 
 def main() -> None:
-    jobs = build("core")
-    assert len(jobs) == 258, len(jobs)
-    assert len({job.job_id for job in jobs}) == len(jobs)
-    assert len(build("full")) == 330
-    for job in jobs: job.validate()
-    print("Manifest validation passed: core=258 jobs, full=330 jobs, all IDs unique.")
+    core = build("core"); full = build("full")
+    assert len(core) == CORE_JOBS, len(core)
+    assert len(full) == FULL_JOBS, len(full)
+    for jobs in (core, full, build("smoke")):
+        assert len({job.job_id for job in jobs}) == len(jobs)
+        for job in jobs: job.validate()
+    ids = {job.job_id for job in core}
+    missing = COMPLETED_V1 - ids
+    assert not missing, f"completed v1 jobs no longer in manifest: {missing}"
+    on_disk = {p.parent.name for p in (Path(__file__).parent / "results" / "core").glob("*/summary.json")}
+    print(f"Manifest validation passed: core={len(core)}, full={len(full)}, all IDs unique; "
+          f"{len(ids & on_disk)} completed core results on disk will be skipped.")
 
 
 if __name__ == "__main__": main()

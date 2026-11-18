@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.locks/
+*.tmp
+.venv/
+# Resume checkpoints are local-only (ResNet-18 ones are ~45 MB each). The 7 that were
+# committed earlier stay tracked so the completed v1 jobs travel with the repo.
+results/**/checkpoint.pt
+# Analysis archives can be regenerated with `cli.py package`.
+packages/*.zip
+results/smoke_v1_old/
+# Datasets are downloaded on first use.
+data/cifar10/

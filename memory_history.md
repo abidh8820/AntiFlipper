@@ -1,0 +1,33 @@
+# Memory History
+
+Running log of conversations and context for AntiFlipper. Newest entries at the bottom.
+Each entry: date, what was discussed/done, decisions, and next steps.
+
+---
+
+## 2026-11-18
+
+- Discussed how to keep conversation context available across machines (repo notes + `CLAUDE.md`, syncing the `~/.claude` memory folder, or cloud sessions).
+- **Decision:** maintain this `memory_history.md` in the repo root after every conversation.
+- Created `CLAUDE.md` with the rule to update this file at the end of each conversation.
+- **Next:** none pending.
+
+## 2026-11-18 (session 2)
+
+- Reviewed `Paper/v8/reviews.txt` (GLOBECOM 2026, 3rd rejection; scores mostly 3/3/3, presentation 2–3). Main criticisms: limited novelty ("well investigated"), single-seed results, no malicious-ratio sweep, only Dirichlet α=1, no hyperparameter values/sensitivity, fake-accuracy-report attacker not addressed, old references, α symbol overloaded, section outline skips VII, unexplained 3.01ms < FedAvg 4.61ms, inconsistent client counts.
+- Found the existing plan (`Note/updates2.md`) and the experiment framework (`Code_Journal_Experiments`, 258-job core manifest). Only 6 of the 258 jobs are done (MNIST IID: AntiFlipper and FedAvg; Median is partial).
+- Advised: the core problem is novelty, not seed count. Cut the matrix hard (drop MNIST from sweeps, use CIFAR-10 non-IID as the main setting, about 6 baselines, sweeps with 4 methods). Add one real new idea (an accuracy-faking adaptive attacker plus a cheap mitigation). Target a venue that fits the work (journal or TPS letter) instead of GLOBECOM a 4th time.
+- **Next:** user to pick a direction (venue and reframe); run a per-job timing benchmark to size the reduced matrix.
+
+## 2026-11-18 (session 3)
+
+- User decision: **not submitting anywhere for now**. The paper is kept as proof of work, target 6 pages (6–8 allowed); a detailed journal version comes later. This session: code only. Prepare the scheduler but do **not** run or schedule it.
+- New branch `reduced-matrix-2026` (from `update-2026`).
+- Code changes in `Code_Journal_Experiments/`:
+  - Reduced, priority-ordered manifest: core = 171 jobs (was 258), full = 237. Old manifest archived as `manifests/core_v1_258jobs.json`. The 6 completed MNIST-IID jobs keep their ids (late config fields are omitted from the hash at defaults; A1 keeps the v1 tags `("tier2","headline")`).
+  - New adaptive attacker `report_strategy="clean_labels"` (trains on flipped labels, reports accuracy on clean labels).
+  - New method `antiflipper_cc`: last-layer cosine to the coordinate-median update, with a robust z-score; inconsistent reports are replaced by the round's worst report.
+  - Timing now includes the trust update (`defense_seconds`); FLTrust root training is separate; per-round detection P/R/F1/FPR for all selecting baselines; analytic upload bytes.
+  - Removed the stale `.locks/core.lock` (PID from Sept, dead).
+- Default `python` on this machine is CPU-only (torch 2.8.0+cpu). The GPU env must be set through `ANTIFLIPPER_PYTHON`.
+- **Next:** paper revision (6–8 pages); later, run `run_all.cmd core <workers>` from the GPU env.

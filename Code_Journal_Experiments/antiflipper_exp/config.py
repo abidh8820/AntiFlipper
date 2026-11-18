@@ -9,6 +9,15 @@ from typing import Any
 
 LABEL_MAP = {0: 1, 1: 0, 2: 3, 3: 2, 4: 5, 5: 4, 6: 7, 7: 6, 8: 9, 9: 8}
 
+# Methods whose server logic is the AntiFLipper trust pipeline.
+ANTIFLIPPER_METHODS = {"antiflipper", "antiflipper_cc"}
+KNOWN_METHODS = ANTIFLIPPER_METHODS | {"fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust"}
+
+# Fields added after the first experiments were run. They are omitted from the
+# canonical form (and therefore from the config hash / job id) while they hold
+# their default value, so already-completed jobs keep their identity.
+_LATE_FIELDS_DEFAULTS = {"report_strategy": "honest", "consistency_z": 2.5}
+
 
 @dataclass(frozen=True)
 class ExperimentConfig:
@@ -46,8 +55,20 @@ class ExperimentConfig:
     data_root: str = "data"
     notes: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
+    # "honest": every client reports the accuracy it actually measured (submitted threat model).
+    # "clean_labels": adaptive attacker trains on flipped labels but reports the accuracy
+    # measured on its *unflipped* local labels, i.e. it lies to look honest.
+    report_strategy: str = "honest"
+    # antiflipper_cc only: robust z-score cut-off for the update-consistency cross-check.
+    consistency_z: float = 2.5
 
     def validate(self) -> None:
+        if self.method not in KNOWN_METHODS:
+            raise ValueError(f"Unknown method: {self.method}")
+        if self.report_strategy not in {"honest", "clean_labels"}:
+            raise ValueError("report_strategy must be honest or clean_labels")
+        if self.consistency_z <= 0:
+            raise ValueError("consistency_z must be positive")
         if self.dataset not in {"MNIST", "CIFAR10", "SYNTHETIC"}:
             raise ValueError(f"Unsupported dataset: {self.dataset}")
         if self.distribution not in {"IID", "NON_IID"}:
@@ -72,6 +93,9 @@ class ExperimentConfig:
     def canonical(self) -> dict[str, Any]:
         value = asdict(self)
         value["tags"] = list(self.tags)
+        for name, default in _LATE_FIELDS_DEFAULTS.items():
+            if value.get(name) == default:
+                value.pop(name)
         return value
 
     @property

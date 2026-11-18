@@ -1,0 +1,130 @@
+------- Review Reports ------
+======= GC 2026-review 1 =======
+
+> *** Relevance and timeliness: Rate the importance and timeliness of the topic addressed in the paper within its area of research.
+Acceptable (3)
+
+> *** Technical content and scientific rigour: Rate the technical content of the paper (e.g.: completeness of the analysis or simulation study, thoroughness of the treatise, accuracy of the models, etc.), its soundness and scientific rigour.
+Valid work but limited contribution. (3)
+
+> *** Novelty and originality: Rate the novelty and originality of the ideas or results presented in the paper.
+Some interesting ideas and results on a subject well investigated. (3)
+
+> *** Quality of presentation: Rate the paper organization, the clearness of text and figures, the completeness and accuracy of references.
+Substantial revision work is needed. (2)
+
+> *** Strong aspects: Comments to the author: what are the strong aspects of the paper
+
+1. The client-side accuracy evaluation strategy is conceptually sound and naturally aligned with the label-flipping threat model. When clients flip labels, the global model trained on honest data will perform poorly on poisoned local data, creating an inherent detection signal that does not require server-side model update inspection. The scalar accuracy report preserves privacy while providing a lightweight detection mechanism. The trust inference module with quadratic penalty function and the flag-counter behavior profiling together form a principled detection pipeline that tolerates transient non-IID deviations while progressively excluding persistently anomalous clients. The dynamic attack experiments (delayed and intermittent attacks) further demonstrate robustness against adaptive adversaries.
+
+2. The defense achieves genuinely competitive accuracy across multiple datasets and distribution settings while maintaining significantly lower server-side aggregation overhead than established baselines. On MNIST, AntiFLipper achieves 97.06% accuracy (IID) and 96.77% (non-IID) while requiring only 3.01ms and 2.96ms aggregation time respectively, substantially outperforming FLAME and LFighter. On CIFAR-10 non-IID, AntiFLipper leads in both accuracy and efficiency, significantly outperforming FLAME and matching or exceeding LFighter. The 10% evaluation subset experiment is a valuable contribution, showing only 1.1% client-side overhead with negligible accuracy degradation.
+
+3. The paper provides clear formal analysis of the core detection mechanism through Lemma-1 and Lemma-2, connecting the empirical design to theoretical justification. The computational overhead analysis in Section VII provides a principled trade-off formula between evaluation fraction alpha and detection sensitivity, and the ablation study on evaluation subset size is practically useful for deployment. The security analysis section addresses the fundamental question of why accuracy-based detection works for label-flipping attacks, and the flag-counter mechanism provides a principled approach to handling non-IID data heterogeneity without distribution-specific assumptions.
+
+> *** Weak aspects: Comments to the author: what are the weak aspects of the paper?
+
+1. The core detection mechanism is fundamentally limited by its dependence on global model quality and cannot reliably detect attacks when malicious clients are numerous enough to significantly degrade the global model. If 40% of clients consistently flip labels, the global model itself will be substantially poisoned over time, reducing the accuracy gap between honest and malicious clients and undermining the detection signal. The paper does not analyze this critical failure mode or provide guarantees about detection performance under varying malicious client ratios beyond the fixed 40% setting. The Lemma-1 proof assumes the global model is trained on a majority of honest data, but this assumption weakens as the poisoning ratio increases, and the formal analysis does not quantify the threshold at which detection fails.
+
+2. The threat model is narrowly scoped to label-flipping attacks while the paper positions AntiFLipper as a general-purpose defense for federated learning. The method is not evaluated against model poisoning attacks, gradient manipulation attacks, or backdoor attacks, which are equally or more common in practical FL deployments. The comparison against existing defenses is also limited to methods specifically designed for label-flipping or basic robust aggregation, without comparison to more modern robust aggregation methods like Bulyan, Flame, CRFL, or recent trust-based methods. The claim that AntiFLipper addresses a critical gap in existing defenses is weakened by this narrow evaluation scope and the absence of comparison against state-of-the-art general-purpose FL security methods.
+
+3. The experimental evaluation is limited in scope and lacks statistical rigor. Experiments use only two standard image classification datasets with standard CNN/ResNet architectures, and do not include tabular data, time-series, or NLP domains that are equally relevant to the stated IoT and edge deployment scenarios. All results are reported as single-point estimates without standard deviations, confidence intervals, or multiple random seed runs, making it impossible to assess whether observed differences are statistically significant. The hyperparameter sensitivity analysis is missing, particularly for the trust threshold, flag counter threshold, and learning rate alpha, which are critical for practical deployment. The paper also does not evaluate the defense's behavior under realistic deployment conditions such as client dropout, stragglers, communication failures, or varying client participation rates.
+
+> *** Recommended changes: Please indicate any changes that should be made to the paper if accepted.
+
+1. Analyze the detection performance across varying malicious client ratios (10%, 20%, 30%, 40%, 50%) and provide a clear characterization of the failure threshold. This would establish the practical limits of the approach and clarify whether the defense remains effective when the global model is significantly degraded by poisoning. The theoretical analysis should be extended to quantify the accuracy gap between honest and malicious clients as a function of the poisoning ratio and the global model's corruption level.
+
+2. Authors would provide a more comprehensive assessment of the defense's general applicability and clarify its position relative to general-purpose FL security methods. Compare against modern robust aggregation methods including Bulyan, Flame, CRFL, and recent trust-based detection methods to provide proper competitive baselines.
+
+3. Run experiments with multiple random seeds and report mean plus or minus standard deviation for accuracy and aggregation time metrics. Include ablation studies on hyperparameter sensitivity, particularly for the trust threshold, flag counter threshold, and learning rate alpha. Evaluate the defense under realistic deployment conditions, including client dropout, stragglers, communication failures, and varying participation rates to assess practical robustness.
+
+4. Expand the experimental evaluation to include datasets and domains relevant to the stated IoT and edge deployment scenarios. Include tabular industrial data, time-series sensor data, or NLP datasets in addition to the current image classification benchmarks. Evaluate on more diverse model architectures beyond CNN and ResNet, including lightweight models typically used in resource-constrained edge deployments.
+
+5. A client's accuracy score implicitly reveals information about its local data distribution, which could be exploited for membership inference or data reconstruction attacks. Provide a formal privacy analysis quantifying the information leakage from accuracy reports and discuss whether differential privacy mechanisms could be applied to the accuracy scores without significantly degrading detection performance.
+
+6. The core detection mechanism of using local accuracy deviations to identify malicious clients has precedent in the FL security literature, and the paper should more clearly articulate the novel aspects of the approach and how it differs fundamentally from prior work.
+
+7. The current overhead analysis assumes full-capacity edge devices with sufficient computational resources for local evaluation. Provide measurements of memory usage, energy consumption, and inference latency on representative resource-constrained devices to validate the claim that the approach is suitable for IoT and edge deployments.
+
+> *** Submission Policy: Does the paper list the same author(s), title and abstract (minor wording differences in the abstract are okay) in its PDF file and EDAS registration? (yes/no)
+
+yes
+
+======= GC 2026-review 2 =======
+
+> *** Relevance and timeliness: Rate the importance and timeliness of the topic addressed in the paper within its area of research.
+Good (4)
+
+> *** Technical content and scientific rigour: Rate the technical content of the paper (e.g.: completeness of the analysis or simulation study, thoroughness of the treatise, accuracy of the models, etc.), its soundness and scientific rigour.
+Valid work but limited contribution. (3)
+
+> *** Novelty and originality: Rate the novelty and originality of the ideas or results presented in the paper.
+Some interesting ideas and results on a subject well investigated. (3)
+
+> *** Quality of presentation: Rate the paper organization, the clearness of text and figures, the completeness and accuracy of references.
+Readable, but revision is needed in some parts. (3)
+
+> *** Strong aspects: Comments to the author: what are the strong aspects of the paper
+
+This paper addresses a practical and important problem in federated learning security. The proposed AntiFLipper is well-motivated and technically sound. The client-side evaluation strategy is novel and effectively reduces server-side aggregation overhead without requiring a reference dataset, which preserves the privacy principle of federated learning. The four-stage defense mechanism is clearly designed and easy to follow. Experimental results are comprehensive, covering both IID and non-IID settings across two benchmark datasets and comparing against eight baseline methods. The efficiency advantage is notable, achieving aggregation time of 3.01ms on MNIST, significantly outperforming existing defenses. The method also demonstrates robustness under dynamic attack scenarios, which reflects its practical applicability.
+
+> *** Weak aspects: Comments to the author: what are the weak aspects of the paper?
+
+The paper has several aspects that need further improvement. The threat model is not comprehensive enough, and some attack scenarios are not well addressed. In terms of experimental design, the heterogeneity settings are too limited, some experiment configurations are inconsistent, and the statistical validation is weak, leaving room to improve the credibility of the results. The theoretical analysis is also incomplete, as communication overhead and model convergence are not fully discussed, and hyperparameter settings lack justification and sensitivity analysis. In addition, there are minor issues with symbol consistency, structural description, and the timeliness of references. The authors are encouraged to revise accordingly.
+
+> *** Recommended changes: Please indicate any changes that should be made to the paper if accepted.
+
+1.The threat model restricts the attacker to local label flipping, but does not consider the case where a malicious client reports fake accuracy values to disguise itself as an honest node and bypass detection. This is a logical gap. The authors should discuss this scenario and propose corresponding countermeasures.
+2.The paper analyzes the computational overhead of local evaluation on the client side, but does not provide any analysis or experimental validation of communication overhead. A quantitative analysis of communication cost should be added and compared with baseline methods.
+3.The paper does not state how many times the experiments were repeated. All results come from a single run, with no mean or standard deviation reported, which weakens statistical credibility. The authors should provide results averaged over multiple independent runs.
+4.All non-IID experiments are conducted only under Dirichlet α=1, which is a mild heterogeneity setting. More extreme settings such as α=0.1 are not tested, so the robustness boundary of the method is not fully verified. Results under different α values should be added.
+5.The key hyperparameters τ_thresh and cnt_max are not given specific values in the experimental section, and no sensitivity analysis is provided. This makes it difficult to guide parameter selection in real deployments. The authors should report the values used and include a sensitivity analysis.
+6.AntiFLipper achieves an aggregation time of 3.01ms on MNIST, which is lower than the no-defense baseline FedAvg at 4.61ms. The paper provides no explanation for this. The authors should clarify why the proposed method is faster than the baseline.
+7.The paper does not state the number of clients used in the MNIST IID setting. For CIFAR-10, 100 clients are used under IID but only 20 under non-IID. This inconsistency makes cross-setting comparisons unreliable. The authors should unify the client numbers or provide a clear explanation for the difference.
+8.The paper provides no theoretical analysis of global model convergence. It is unclear whether the training process remains stable as clients are progressively excluded. The authors should add a convergence proof or at least supporting experimental evidence.
+9.Only 3 out of 21 references were published between 2023 and 2025. The paper does not sufficiently engage with recent advances in the field. The authors should include more up-to-date references.
+10.The symbol α is used with three different meanings throughout the paper: the learning rate for trust updates, the Dirichlet distribution parameter, and the local evaluation data ratio in Section VII. This causes confusion and should be resolved by using distinct symbols.
+11.The structural overview in the introduction skips Section VII and jumps directly from Section VI to Section VIII, which does not match the actual paper structure. The description should be corrected to include Section VII.
+
+> *** Submission Policy: Does the paper list the same author(s), title and abstract (minor wording differences in the abstract are okay) in its PDF file and EDAS registration? (yes/no)
+
+yes
+
+======= GC 2026-review 3 =======
+
+> *** Relevance and timeliness: Rate the importance and timeliness of the topic addressed in the paper within its area of research.
+Acceptable (3)
+
+> *** Technical content and scientific rigour: Rate the technical content of the paper (e.g.: completeness of the analysis or simulation study, thoroughness of the treatise, accuracy of the models, etc.), its soundness and scientific rigour.
+Valid work but limited contribution. (3)
+
+> *** Novelty and originality: Rate the novelty and originality of the ideas or results presented in the paper.
+Some interesting ideas and results on a subject well investigated. (3)
+
+> *** Quality of presentation: Rate the paper organization, the clearness of text and figures, the completeness and accuracy of references.
+Readable, but revision is needed in some parts. (3)
+
+> *** Strong aspects: Comments to the author: what are the strong aspects of the paper
+
+AntiFLipper offers a practical defense against label-flipping by shifting detection to client-side evaluation of global-model accuracy on local data and transmitting only scalar scores.
+
+> *** Weak aspects: Comments to the author: what are the weak aspects of the paper?
+
+The core idea is conceptually related to prior trust-based and validation-score defenses, limiting originality.
+
+Security lemmas are informal and do not address adaptive attackers who flip labels selectively to mimic honest accuracy profiles or colluding clients that coordinate to stay near the average.
+
+Honest clients with severe non-IID skew could still be penalized despite the flag-counter mechanism, and this failure mode is not empirically stress-tested.
+
+> *** Recommended changes: Please indicate any changes that should be made to the paper if accepted.
+
+1. evaluate against adaptive label-flipping strategies and partial-flip attacks designed to evade average-based detection
+
+2. compare directly with FLTrust/HSCSFL-style defenses under identical CIFAR-10 non-IID splits and report detection precision/recall for malicious client identification
+
+3. fix section numbering (Section VII appears before Section VIII in the outline)
+
+4. discuss privacy leakage from repeated accuracy scalars across rounds when client data distributions are small or unique
+
+> *** Submission Policy: Does the paper list the same author(s), title and abstract (minor wording differences in the abstract are okay) in its PDF file and EDAS registration? (yes/no)
+
+yes

@@ -1,16 +1,28 @@
-TO run 
-cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
-.\run_all.cmd core 1
+On the GPU machine (branch reduced-matrix-2026)
 
-Monitor
-cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
+cd C:\Projeccts\AntiFlipper
+git fetch
+git checkout reduced-matrix-2026
+git pull
+cd Code_Journal_Experiments
+
+# point to the CUDA python if it is not the active one
+$env:ANTIFLIPPER_PYTHON = "C:\path\to\gpu-env\python.exe"
+
+# 1) sanity: must print "Manifest validation passed: core=171 ... 6 completed"
+& $env:ANTIFLIPPER_PYTHON self_test.py
+# 2) pipeline smoke test (CPU-sized, ~1 min)
+.\run_all.cmd smoke
+
+# Terminal 1: run core (171 jobs, priority order P1 -> P3). 2nd arg = parallel workers.
+.\run_all.cmd core 2
+
+# Terminal 2: monitor
 .\monitor.cmd core
 
-# Terminal 1
-cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
-.\run_all.cmd core 1
+# Optional afterwards: full profile (+66 jobs)
+.\run_all.cmd full 2
 
-
-# Terminal 2
-cd C:\Projeccts\AntiFlipper\Code_Journal_Experiments
-.\monitor.cmd core
+Ctrl+C is safe; re-run the same command to resume.
+To bring results back: git add results analysis CHECKLIST.md checklist.csv; git commit; git push
+(checkpoints and zip packages are git-ignored).

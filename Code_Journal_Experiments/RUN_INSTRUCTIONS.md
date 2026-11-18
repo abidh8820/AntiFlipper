@@ -5,7 +5,7 @@ This is the short operational guide for running the automated journal experiment
 ## 1. Open PowerShell in the experiment folder
 
 ```powershell
-cd D:\Code\Papers\AntiFlipper\Code_Journal_Experiments
+cd "E:\New Projects\Personal\AntiFlipper\Code_Journal_Experiments"
 ```
 
 ## 2. Select the CUDA-enabled Python environment
@@ -48,12 +48,13 @@ The smoke profile runs a small offline synthetic experiment. It verifies trainin
 .\run_all.cmd
 ```
 
-This runs the default `core` profile containing 258 independently checkpointed jobs:
+This runs the default `core` profile: 171 independently checkpointed jobs in priority order (see `EXPERIMENTS.md`):
 
-- A1 headline replication and FLTrust comparison;
-- A2 clean heterogeneity/false-positive tests;
-- A3 malicious-client-ratio sweep;
-- A5-lite hyperparameter sensitivity with matched controls.
+- P1: CIFAR-10 non-IID headline (incl. FLTrust and AntiFLipper-CC) and the adaptive report-faking attacker;
+- P2: malicious-ratio boundary, clean and attacked heterogeneity;
+- P3: CIFAR-10 IID, MNIST, and threshold sensitivity.
+
+The 6 MNIST-IID jobs completed under the old 258-job manifest are skipped automatically.
 
 No manual intervention is needed between jobs.
 
@@ -78,7 +79,7 @@ After the core profile has finished, run:
 .\run_all.cmd full
 ```
 
-The full profile contains the core jobs plus the optional A4 partial-flip and A6 ablation experiments, for 330 jobs total. Jobs already completed under a different profile have separate result directories; do not delete core results.
+The full profile contains the core jobs plus the optional A4 partial-flip, A6 ablation, and legacy-baseline (Trimmed Mean, FoolsGold, Tolpegin) experiments, for 237 jobs total. Jobs already completed under a different profile have separate result directories; do not delete core results.
 
 ## Interruption and automatic resumption
 
@@ -195,7 +196,7 @@ The ZIP contains configurations, environment information, raw per-round metrics,
 ## Recommended command sequence
 
 ```powershell
-cd D:\Code\Papers\AntiFlipper\Code_Journal_Experiments
+cd "E:\New Projects\Personal\AntiFlipper\Code_Journal_Experiments"
 $env:ANTIFLIPPER_PYTHON = "C:\path\to\gpu-environment\python.exe"
 .\run_all.cmd smoke
 .\run_all.cmd

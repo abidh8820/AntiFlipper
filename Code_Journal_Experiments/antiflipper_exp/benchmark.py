@@ -10,11 +10,26 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .aggregators import AggregatorState, aggregate
+from .aggregators import AggregatorState, aggregate, update_consistency
+from .config import ExperimentConfig
 from .models import create_model
 
 
-METHODS = ("antiflipper", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
+METHODS = ("antiflipper", "antiflipper_cc", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
+
+
+def _antiflipper_server_work(method: str, states: list[dict], base: dict, count: int, iteration: int) -> None:
+    """Server-side work AntiFLipper does before aggregation, so the benchmark is not
+    just a weighted average: (cc) consistency check + trust update + thresholding."""
+    from .engine import _update_trust
+
+    if method == "antiflipper_cc":
+        update_consistency(states, base, 2.5)
+    cfg = ExperimentConfig("bench", "MNIST", "IID", "antiflipper", 0, rounds=1, num_clients=count)
+    rng = np.random.default_rng(iteration)
+    reports = {i: float(x) for i, x in enumerate(rng.uniform(0.5, 1.0, count))}
+    trust = {i: 1.0 / count for i in range(count)}
+    _update_trust(cfg, reports, trust, {i: 0 for i in range(count)}, set(), cfg.grace_rounds, {})
 
 
 def _states(dataset: str, count: int) -> tuple[dict, list[dict], dict]:
@@ -52,6 +67,8 @@ def fixed_workload_benchmark(output: Path, iterations: int = 5) -> list[dict]:
                     runtime = AggregatorState()
                     for iteration in range(iterations + 1):
                         started = time.perf_counter()
+                        if method in ("antiflipper", "antiflipper_cc"):
+                            _antiflipper_server_work(method, states, base, count, iteration)
                         aggregate(method, states, base, client_ids, 0.4, runtime, trust_weights=trust, root_state=root, seed=iteration)
                         elapsed = time.perf_counter() - started
                         if iteration: times.append(elapsed)
@@ -61,7 +78,7 @@ def fixed_workload_benchmark(output: Path, iterations: int = 5) -> list[dict]:
                     "dataset": dataset, "method": method, "parameters": parameters, "updates": count,
                     "iterations": len(times), "mean_seconds": statistics.fmean(times) if times else "",
                     "std_seconds": statistics.stdev(times) if len(times) > 1 else (0.0 if times else ""), "error": error,
-                    "workload": "identical deterministic synthetic model states on CPU; malicious_fraction=0.4",
+                    "workload": "identical deterministic synthetic model states on CPU; malicious_fraction=0.4; AntiFLipper rows include trust update (+consistency check for _cc); FLTrust excludes root training",
                 })
             del states, base, root
     with (output / "fixed_workload_timing.csv").open("w", newline="", encoding="utf-8") as handle:

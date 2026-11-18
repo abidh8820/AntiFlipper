@@ -8,7 +8,14 @@ from collections import defaultdict
 from pathlib import Path
 
 
-METRICS = ("final_accuracy", "last10_accuracy_mean", "final_asr", "accuracy_auc", "final_precision", "final_recall", "final_f1", "final_fpr", "mean_aggregation_seconds", "mean_round_seconds")
+METRICS = (
+    "final_accuracy", "last10_accuracy_mean", "final_asr", "accuracy_auc",
+    "final_precision", "final_recall", "final_f1", "final_fpr",
+    "mean_round_precision", "mean_round_recall", "mean_round_f1", "mean_round_fpr",
+    "honest_excluded", "attackers_excluded", "final_surviving_clients",
+    "mean_aggregation_seconds", "mean_defense_seconds", "mean_root_training_seconds", "mean_round_seconds",
+    "upload_bytes_per_client_round",
+)
 
 
 def _read_completed(results_root: Path) -> list[tuple[dict, dict]]:
@@ -25,14 +32,17 @@ def analyze(results_root: Path, output: Path) -> dict:
     completed = _read_completed(results_root)
     per_run: list[dict] = []
     for config, summary in completed:
+        # Configs written before these fields existed are at their defaults.
+        config = {"report_strategy": "honest", "consistency_z": 2.5, **config}
         row = {**config, **{key: summary.get(key) for key in METRICS}, "job_id": summary["job_id"]}
         row["tags"] = ",".join(config.get("tags", []))
         per_run.append(row)
     if per_run:
+        fields = list(dict.fromkeys(k for row in per_run for k in row))
         with (output / "per_run_metrics.csv").open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(per_run[0])); writer.writeheader(); writer.writerows(per_run)
+            writer = csv.DictWriter(handle, fieldnames=fields, restval=""); writer.writeheader(); writer.writerows(per_run)
 
-    identity = ("experiment", "dataset", "distribution", "method", "dirichlet_alpha", "malicious_client_fraction", "label_poison_fraction", "eta", "threshold_mode", "rho_threshold", "counter_threshold", "counter_mode", "trust_update", "notes")
+    identity = ("experiment", "dataset", "distribution", "method", "report_strategy", "dirichlet_alpha", "malicious_client_fraction", "label_poison_fraction", "eta", "threshold_mode", "rho_threshold", "counter_threshold", "counter_mode", "trust_update", "notes")
     groups: dict[tuple, list[dict]] = defaultdict(list)
     for row in per_run: groups[tuple(row.get(k) for k in identity)].append(row)
     aggregate_rows: list[dict] = []
@@ -63,7 +73,7 @@ def _markdown_report(per_run: list[dict], aggregate: list[dict]) -> str:
     experiments = sorted({x["experiment"] for x in per_run})
     lines = ["# AntiFLipper automated analysis", "", f"Completed runs analyzed: **{len(per_run)}**.", "", "## Included experiment groups", ""]
     lines += [f"- {name}" for name in experiments] or ["- None yet"]
-    lines += ["", "## Interpretation notes", "", "- Seed-level runs are the independent observations; rounds are not treated as independent replicates.", "- `*_ci95` uses the normal approximation `1.96 * s / sqrt(n)` and should be interpreted cautiously for three seeds.", "- ASR is the fraction of test predictions equal to the fixed paired-label permutation; interpret it together with clean/no-attack controls.", "- AntiFLipper detection metrics are meaningful for AntiFLipper. Other aggregators do not explicitly classify clients and therefore retain default empty-detection values.", "- `mean_aggregation_seconds` is observed aggregation time during training. Run the fixed-workload benchmark separately for matched-workload timing.", ""]
+    lines += ["", "## Interpretation notes", "", "- Seed-level runs are the independent observations; rounds are not treated as independent replicates.", "- `*_ci95` uses the normal approximation `1.96 * s / sqrt(n)` and should be interpreted cautiously for three seeds.", "- ASR is the fraction of test predictions equal to the fixed paired-label permutation; interpret it together with clean/no-attack controls.", "- Detection metrics: AntiFLipper variants are scored on their cumulative exclusion set; per-round selectors (Multi-Krum, FLAME, LFighter, FLTrust, FoolsGold, Tolpegin) on clients given zero weight (`final_*` = last round, `mean_round_*` = averaged over rounds). FedAvg/Median/Trimmed Mean do not classify clients and have empty detection values.", "- `mean_aggregation_seconds` is the aggregation call only; `mean_defense_seconds` adds server-side pre-aggregation work (trust update, consistency check). FLTrust root-model training is reported separately as `mean_root_training_seconds`. Run the fixed-workload benchmark for matched-N timing.", "- `upload_bytes_per_client_round` is analytic: float32 model size, plus 4 bytes for the AntiFLipper accuracy scalar.", ""]
     lines += _automated_findings(aggregate)
     if aggregate:
         lines += ["## Headline summary", "", "| Experiment | Dataset | Distribution | Method | Seeds | Final accuracy | Recall | FPR |", "|---|---|---|---|---:|---:|---:|---:|"]
@@ -94,6 +104,9 @@ def _automated_findings(aggregate: list[dict]) -> list[str]:
     if boundary:
         if failed: lines.append(f"- Detection boundary: mean recall first fell below 0.90 at malicious fraction {failed['malicious_client_fraction']:.2f} (recall {failed['final_recall_mean']:.4f}).")
         else: lines.append(f"- Detection boundary: mean recall remained at least 0.90 through the largest completed malicious fraction ({boundary[-1]['malicious_client_fraction']:.2f}).")
+    adaptive = [x for x in aggregate if x["experiment"] == "A7_adaptive_report" and "final_recall_mean" in x]
+    for row in sorted(adaptive, key=lambda x: x["method"]):
+        lines.append(f"- Adaptive report-faking attacker: {row['method']} recall {row['final_recall_mean']:.4f}, final accuracy {row.get('final_accuracy_mean', float('nan')):.4f}.")
     partial = sorted([x for x in aggregate if x["experiment"] == "A4_partial_flip" and x["method"] == "antiflipper" and "final_recall_mean" in x], key=lambda x: x["label_poison_fraction"])
     if partial:
         lines.append(f"- Partial flipping: AntiFLipper mean recall ranged from {min(x['final_recall_mean'] for x in partial):.4f} to {max(x['final_recall_mean'] for x in partial):.4f} across completed poison fractions; interpret this together with ASR and accuracy degradation.")
@@ -121,7 +134,9 @@ def _plots(rows: list[dict], output: Path) -> None:
         for method in sorted({r["method"] for r in selected}):
             method_rows = [r for r in selected if r["method"] == method]
             points: dict[float, list[float]] = defaultdict(list)
-            for row in method_rows: points[float(row[xkey])].append(float(row[ykey]))
+            for row in method_rows:
+                if row.get(ykey) is not None: points[float(row[xkey])].append(float(row[ykey]))
+            if not points: continue
             xs = sorted(points); ys = [statistics.fmean(points[x]) for x in xs]
             errors = [statistics.stdev(points[x]) if len(points[x]) > 1 else 0 for x in xs]
             plt.errorbar(xs, ys, yerr=errors, marker="o", capsize=3, label=method)

@@ -209,6 +209,36 @@ def flame(states: list[State], global_state: State, seed: int) -> tuple[State, n
     return result, weights
 
 
+def update_consistency(states: list[State], global_state: State, z_cut: float) -> tuple[np.ndarray, np.ndarray]:
+    """AntiFLipper-CC cross-check of the self-reported accuracy.
+
+    A label flip must move the classifier rows of the swapped classes, so a client
+    that trained on flipped labels has a last-layer update pointing away from the
+    honest majority even if it lies about its accuracy. Each update is compared with
+    the coordinate-wise median last-layer update (no server data needed). Clients
+    whose cosine similarity is a robust (median/MAD) outlier on the low side are
+    marked inconsistent. Cost is O(n * |last layer|), negligible next to clustering.
+
+    Returns (similarities, inconsistent_mask).
+    """
+    matrix_keys = [k for k in _float_keys(global_state) if state_ndim(global_state[k]) == 2]
+    bias_keys = [k for k in _float_keys(global_state) if state_ndim(global_state[k]) == 1]
+    keys = [matrix_keys[-1]] + ([bias_keys[-1]] if bias_keys else [])
+    deltas = torch.stack([
+        torch.cat([(s[k].detach().float().cpu() - global_state[k].detach().float().cpu()).reshape(-1) for k in keys])
+        for s in states
+    ])
+    reference = deltas.median(dim=0).values
+    similarity = torch.nn.functional.cosine_similarity(deltas, reference.unsqueeze(0).expand_as(deltas), dim=1, eps=1e-12).numpy()
+    if len(states) < 3:
+        return similarity, np.zeros(len(states), dtype=bool)
+    center = float(np.median(similarity))
+    mad = float(np.median(np.abs(similarity - center)))
+    scale = 1.4826 * mad + 1e-6
+    robust_z = (similarity - center) / scale
+    return similarity, robust_z < -z_cut
+
+
 def fltrust(states: list[State], global_state: State, root_state: State) -> tuple[State, np.ndarray]:
     root_delta = flatten_delta(root_state, global_state)
     root_norm = torch.linalg.vector_norm(root_delta).clamp_min(1e-12)
@@ -243,7 +273,7 @@ def aggregate(
     n = len(states)
     if method == "fedavg":
         weights = np.ones(n); return weighted_average(states, weights), weights
-    if method == "antiflipper":
+    if method in ("antiflipper", "antiflipper_cc"):
         weights = np.asarray(trust_weights, dtype=float); return weighted_average(states, weights), weights
     if method == "median":
         return coordinate_median(states), np.ones(n)

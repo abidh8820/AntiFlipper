@@ -11,15 +11,26 @@
   "final_recall": 0.0,
   "final_f1": 0.0,
   "final_fpr": 0.0,
-  "mean_aggregation_seconds": 0.004055849996802863,
-  "mean_round_seconds": 1.018570099997305,
-  "total_seconds": 2.08733360000042,
+  "mean_round_precision": 1.0,
+  "mean_round_recall": 0.0,
+  "mean_round_f1": 0.0,
+  "mean_round_fpr": 0.0,
+  "honest_excluded": 0,
+  "attackers_excluded": 0,
+  "mean_aggregation_seconds": 0.003146800008835271,
+  "mean_defense_seconds": 0.0032217999978456646,
+  "mean_root_training_seconds": 0.0,
+  "model_parameters": 690,
+  "upload_bytes_per_client_round": 2764,
+  "final_surviving_clients": 4,
+  "mean_round_seconds": 4.344290550012374,
+  "total_seconds": 8.739395000011427,
   "attackers": [
     1
   ],
   "excluded": [],
   "detection_round": {},
   "device": "cpu",
-  "torch_version": "2.13.0+cpu",
-  "platform": "Windows-11-10.0.26200-SP0"
+  "torch_version": "2.8.0+cpu",
+  "platform": "Windows-10-10.0.26300-SP0"
 }
