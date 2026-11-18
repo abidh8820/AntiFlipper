@@ -31,3 +31,10 @@ Each entry: date, what was discussed/done, decisions, and next steps.
   - Removed the stale `.locks/core.lock` (PID from Sept, dead).
 - Default `python` on this machine is CPU-only (torch 2.8.0+cpu). The GPU env must be set through `ANTIFLIPPER_PYTHON`.
 - **Next:** paper revision (6–8 pages); later, run `run_all.cmd core <workers>` from the GPU env.
+
+## 2026-11-18 (session 4)
+
+- Sanity check (MNIST non-IID, 10 clients, 8 rounds, CPU): the adaptive report-faking attacker fully evades AntiFLipper (0/4 excluded, 95.6% → 79.8%). The first CC version flagged 4/4 attackers but excluded none, because replacing the report barely moved trust. Fix: CC-inconsistent clients count as below-threshold toward the counter. After the fix CC excluded 4/4, FPR 0, 95.7%.
+- Git hygiene: added `Code_Journal_Experiments/.gitignore` (pycache, locks, checkpoints, zips); untracked pycache and lock. `To run.txt` was rewritten for the GPU machine (path `C:\Projeccts\AntiFlipper`).
+- Committed and pushed branch `reduced-matrix-2026` to origin. Nothing has been run on GPU yet.
+- **Next:** user pulls on the GPU device and runs `run_all.cmd core 2`; then the paper revision.
