@@ -182,12 +182,34 @@ def job_id(config: dict) -> str:
     return "__".join(str(value).lower().replace(".", "p") for value in fields)
 
 
+PROFILE_CHOICES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix")
+
+
+def latest_profile() -> str:
+    """Profile whose job state was written most recently (the one running now); core if none."""
+    best, best_time = "core", -1.0
+    for profile in PROFILE_CHOICES:
+        if profile == "smoke":
+            continue
+        for state in (ROOT / "results" / profile).glob("*/state.json"):
+            try:
+                mtime = state.stat().st_mtime
+            except OSError:
+                continue
+            if mtime > best_time:
+                best, best_time = profile, mtime
+    return best
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Live AntiFLipper experiment progress monitor")
-    parser.add_argument("--profile", choices=("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix"), default="core")
+    parser.add_argument("--profile", choices=PROFILE_CHOICES, default=None,
+                        help="default: the profile that is running now (most recent job activity)")
     parser.add_argument("--watch", action="store_true", help="refresh continuously")
     parser.add_argument("--interval", type=int, default=10, help="refresh interval in seconds")
     args = parser.parse_args()
+    if args.profile is None:
+        args.profile = latest_profile()
     ansi_watch = args.watch and os.name != "nt"
     alternate_screen = ansi_watch and sys.stdout.isatty()
     if alternate_screen:

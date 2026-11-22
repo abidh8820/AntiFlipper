@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run ./monitor.sh for the live core monitor, or ./monitor.sh --once for a snapshot.
+# Run ./monitor.sh for the live monitor of the running profile (or pass --profile NAME), or ./monitor.sh --once for a snapshot.
 set -eu
 
 script_dir=$(dirname -- "${BASH_SOURCE[0]}")
