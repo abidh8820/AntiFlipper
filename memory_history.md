@@ -188,3 +188,12 @@ Each entry: date, what was discussed/done, decisions, and next steps.
 - Fixed: monitor.py now defaults to the profile with the most recent `state.json` activity (cr now, fltrust_fix later); `--profile` still overrides. Deployed to GPU PC via bundle (GPU at 3f9d9e5); service untouched.
 - CR status at 15:57: 10/84 done, 0 failed; A7 adaptive seed-7 jobs running.
 - Next: check attacked α0.1 + headline pilot results (already complete on GPU).
+
+## 2026-11-22 (seed-7 pilot complete, 17/84 done)
+Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-11-22.
+- Headline (α1, 40%): CR+CC 72.6%, recall 1, FPR 0 (best headline so far; AntiFLipper 70.9 FPR .17, CC 69.9 FPR .33). CR alone 69.3, recall 1, FPR 0 (final-round dip to 43.8, so report last-10). CC z=3 alone 71.0, FPR .25 (z alone does not fix FPR).
+- Attacked α0.1: CR / CR+CC 35.8%, 7/8 attackers caught, 0 honest excluded. Old AntiFLipper 15.6 (FPR .92), budget only 13.6, FedAvg s7 33.9 (mean 43.8), cc_v2 s7 36.0 (catches 0).
+- Adaptive report-faking: CR alone recall .375 (evadable by faking, as expected); CR+CC recall 1, FPR 0, 72.2%.
+- Clean α0.5: CR 68.5 FPR 0; CR+CC 69.3 FPR .15 (old AntiFLipper 34.6, CC 66.5).
+- Clean α0.1 seed 19: CR 61.9, CR+CC 53.1, both FPR 0 (old AntiFLipper 22.8).
+- Decision: the paper's proposed method = AntiFLipper-CR+CC (CR fixes heterogeneity FPs; CC needed against report faking). Watch the CR+CC vs CR accuracy gap at clean α0.1 across seeds.
