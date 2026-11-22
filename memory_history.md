@@ -177,3 +177,8 @@ Each entry: date, what was discussed/done, decisions, and next steps.
 - Monitor: `ssh antiflipper-gpu` then `journalctl --user -u antiflipper-cr -f` or `Code_Journal_Experiments/monitor.sh --profile cr`.
 - **Next:** check the pilot after ~8 h (clean α_D=0.1 FPR, attacked α_D=0.1 acc vs FedAvg 44%, headline ≈71%), then reframe Paper/v9.
 - Gave the user the monitoring commands (`ssh -t ndag@100.75.182.25 "cd ~/Desktop/AAR/AntiFlipper/Code_Journal_Experiments && ./monitor.sh --profile cr"`, `journalctl --user -u antiflipper-cr -f`). Verified: service active, enabled, 0 restarts, linger on, checkpoints written every round; 3 workers; monitor estimate ~1d 21h for cr.
+- First pilot results (2026-11-22 ~13:50, clean α_D=0.1, seed 7, CIFAR):
+  - **CR: 0/20 honest excluded**, final 55.1%, last-10 52.0% (old AntiFLipper: 18/20 excluded, 16.9%; keep-everyone cc_v2 reference 62.7 final / 60.4 last-10 over 3 seeds ±6).
+  - **Budget only: 8/20 excluded (the cap), 13.4%** ⇒ the residual, not the budget, fixes it.
+  - CR+CC: 0 excluded, last-10 45.1%, final 10.3% = a one-round oscillation dip (56% at round 98).
+  - CR weights stay ~uniform (≈5% each). Confirms using the last-10 mean as the headline metric.
