@@ -11,7 +11,10 @@ MNIST-IID jobs keep their ids in v2 and are skipped automatically.
 
 Jobs run **in priority order**. Stopping after P1 or P2 still leaves complete tables.
 
-## Core profile — 219 jobs
+## Core profile — 231 jobs (completed 2026-11-22)
+
+219 jobs as listed below, plus 12 `antiflipper_cc_v2` jobs added on the GPU machine (the `cc_v2` profile).
+All results are in `Results_Backup_2026-11-22/`.
 
 | Priority | ID | Purpose | Matrix | Jobs |
 |---|---|---|---|---:|
@@ -28,7 +31,7 @@ Jobs run **in priority order**. Stopping after P1 or P2 still leaves complete ta
 - Sweep methods: AntiFLipper-CC, AntiFLipper, FedAvg, LFighter, FLTrust.
 - Baselines and cc_only ignore accuracy reports, so for the adaptive attacker their matched runs are the A1 jobs.
 
-## Full profile — 294 jobs
+## Full profile — 306 jobs
 
 Core plus:
 
@@ -37,6 +40,41 @@ Core plus:
 | A4 | Partial-example label flipping (1.0 = A1); hardest case for the cross-check | CC, AntiFLipper, cc_only, LFighter, FLTrust × {0.25, 0.5, 0.75} × 3 seeds | 45 |
 | A6 | Ablations: linear update, absolute threshold, no/consecutive counter | 4 × 3 seeds (MNIST non-IID) | 12 |
 | Legacy | Trimmed Mean, FoolsGold, Tolpegin on CIFAR-10 | 3 × 2 splits × 3 seeds | 18 |
+
+## CR profile — 84 jobs (class-conditional residual, Nov 22)
+
+**Why.** The core results showed report-based AntiFLipper failing under strong skew. At Dirichlet 0.1 with
+**no attackers** it excluded 92% of honest clients (accuracy 16.9%; FedAvg 44%). Clients holding hard or rare
+classes report low accuracy and look like attackers. Each exclusion removes those classes from training, which
+drags the next clients down (a cascade). `cc_v2` (update check only) had 0% false positives there, but caught no attackers
+at all in the headline setting (recall 0, attackers keep 35% of the weight). So the report signal is needed; it
+only has to stop penalizing label mix.
+
+**`antiflipper_cr`.** Clients report per-class correct and sample counts from the same evaluation pass
+(+84 bytes per round). The server pools per-class accuracy, weighted by current trust, computes each client's
+*expected* accuracy for its own label mix, and runs the unchanged trust/counter pipeline on the residual
+`reported - expected`. An honest client holding hard classes has residual ~0. A flipper, whose images of class
+k carry label pi(k), scores ~0 on labels the model otherwise gets right, so its residual is strongly negative.
+Exclusions are capped at the 40% threat-model bound (`max_exclusion_fraction=0.4`, lowest trust first).
+On a constructed skewed case, honest hard-class clients have raw deviation -0.275 (penalized every round)
+but residual 0.000.
+
+**`antiflipper_cr_cc`.** Adds the update-consistency check with `z=3.0`: in the MNIST sensitivity runs, z=3
+gave 1–5% FPR at recall 1.0, vs 13–15% FPR for z=2.5.
+
+**Order (seed-major).** Jobs 1–14 are the seed-7 pilot (~6 GPU hours). Check them before waiting for the rest.
+
+| Block | Settings (CIFAR-10 non-IID unless noted) | Variants | Jobs |
+|---|---|---|---:|
+| Key, 3 seeds | clean α_D=0.1 | CR, CR+CC, budget only, CC z=3 | 12 |
+| | attacked α_D=0.1 | CR, CR+CC, budget only | 9 |
+| | headline (α_D=1, 40%) | CR, CR+CC, CC z=3 | 9 |
+| | report-faking attacker | CR, CR+CC | 6 |
+| | clean α_D=0.5 | CR, CR+CC | 6 |
+| Coverage, 3 seeds | clean α_D=1; ratio 10/20/30%; CIFAR IID; MNIST IID and non-IID | CR, CR+CC | 42 |
+
+"Budget only" (plain AntiFLipper with the 40% cap) and "CC z=3" are ablations: they show whether the residual,
+the budget or the threshold produces any improvement. All other settings reuse the completed core runs as baselines.
 
 ## AntiFLipper-CC
 
@@ -96,7 +134,7 @@ Jobs that ran before a metric was added lack its column; analysis skips missing 
 - `upload_bytes_per_client_round`: analytic communication cost (model + 4-byte scalar for report-based methods).
 - `honest_excluded`, `attackers_excluded`, `final_surviving_clients`, `inconsistent_reports`.
 
-## Smoke profile — 4 jobs
+## Smoke profile — 6 jobs
 
 An offline two-round synthetic run (AntiFLipper, AntiFLipper-CC with the adaptive attacker, cc_only, LFighter).
 It only verifies the pipeline and is not publishable evidence.

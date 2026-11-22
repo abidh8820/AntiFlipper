@@ -24,28 +24,46 @@ OUT = HERE / "generated"
 FIG = HERE / "fig"
 
 NAMES = {
-    "antiflipper_cc": r"\textbf{AntiFLipper-CC}",
+    "antiflipper_cc": r"AntiFLipper-CC",
     "antiflipper": r"AntiFLipper (reports)",
     "cc_only": r"CC only",
     "fedavg": "FedAvg", "median": "Median", "multi_krum": "Multi-Krum", "flame": "FLAME",
     "lfighter": "LFighter", "fltrust": r"FLTrust$^\dagger$",
     "trimmed_mean": "Trimmed Mean", "foolsgold": "FoolsGold", "tolpegin": "Tolpegin",
+    "antiflipper_cr": r"\textbf{AntiFLipper-CR}", "antiflipper_cr_cc": r"AntiFLipper-CR+CC",
+    "antiflipper_budget": r"AntiFLipper + budget", "antiflipper_cc_z3": r"AntiFLipper-CC ($z{=}3$)",
+    "antiflipper_cc_v2": r"CC-v2 (soft)",
 }
-HEADLINE_ORDER = ["fedavg", "median", "multi_krum", "flame", "lfighter", "fltrust", "cc_only", "antiflipper", "antiflipper_cc"]
-SWEEP_ORDER = ["fedavg", "lfighter", "fltrust", "antiflipper", "antiflipper_cc"]
+HEADLINE_ORDER = ["fedavg", "median", "multi_krum", "flame", "lfighter", "fltrust", "cc_only", "antiflipper_cc", "antiflipper", "antiflipper_cr_cc", "antiflipper_cr"]
+SWEEP_ORDER = ["fedavg", "lfighter", "fltrust", "antiflipper", "antiflipper_cr"]
+PROFILES = ("core", "cr")
 DASH = "--"
 
 
 # ----------------------------------------------------------------------------- data
 
+RESULT_ROOTS = (EXP / "results", REPO / "Results_Backup_2026-11-22" / "Code_Journal_Experiments" / "results")
+
+
 def load_runs(profile: str) -> list[dict]:
-    """One dict per completed job: config fields + summary fields (read from results/)."""
-    runs = []
-    for summary_path in (EXP / "results" / profile).glob("*/summary.json"):
+    """One dict per completed job: config fields + summary fields. Reads the live
+    results/ tree and the 2026-11-22 backup; a job present in both is read once."""
+    runs, seen = [], set()
+    paths = [p for root in RESULT_ROOTS for p in (root / profile).glob("*/summary.json")]
+    for summary_path in paths:
+        if summary_path.parent.name in seen:
+            continue
+        seen.add(summary_path.parent.name)
         config_path = summary_path.parent / "config.json"
         if not config_path.exists():
             continue
-        config = {"report_strategy": "honest", "consistency_z": 2.5, **json.loads(config_path.read_text(encoding="utf-8"))}
+        config = {"report_strategy": "honest", "consistency_z": 2.5, "max_exclusion_fraction": 1.0,
+                  **json.loads(config_path.read_text(encoding="utf-8"))}
+        # Ablations reuse method names; give them distinct labels so they never mix.
+        if config["method"] == "antiflipper" and config["max_exclusion_fraction"] < 1:
+            config["method"] = "antiflipper_budget"
+        elif config["method"] == "antiflipper_cc" and abs(config["consistency_z"] - 2.5) > 1e-9:
+            config["method"] = "antiflipper_cc_z3"
         runs.append({**config, **json.loads(summary_path.read_text(encoding="utf-8")), "_dir": summary_path.parent})
     return runs
 
@@ -124,7 +142,7 @@ def table_detection(runs) -> None:
         detects = method not in ("fedavg", "median")
         cells = [fmt(rows, "final_asr", 100, 1, pm=False)]
         cells += [fmt(rows, m, 1, 2, pm=False) if detects else "n/a" for m in ("final_precision", "final_recall", "final_fpr")]
-        cells.append(fmt(rows, "mean_detection_round", 1, 1, pm=False) if method in ("antiflipper", "antiflipper_cc", "cc_only") else "n/a")
+        cells.append(fmt(rows, "mean_detection_round", 1, 1, pm=False) if method.startswith("antiflipper") or method == "cc_only" else "n/a")
         lines.append(f"{NAMES[method]} & " + " & ".join(cells) + r" \\")
     lines += [r"\hline", r"\end{tabular}", r"\end{table}", ""]
     write("table_detection.tex", "\n".join(lines))
@@ -139,9 +157,10 @@ def table_adaptive(runs) -> None:
         r"& \multicolumn{2}{c|}{\textbf{Honest reports}} & \multicolumn{2}{c}{\textbf{Faked reports}} \\",
         r"\textbf{Method} & Acc. (\%) & Recall & Acc. (\%) & Recall \\", r"\hline",
     ]
-    for method in ("lfighter", "fltrust", "cc_only", "antiflipper", "antiflipper_cc"):
+    for method in ("lfighter", "fltrust", "cc_only", "antiflipper", "antiflipper_cc", "antiflipper_cr", "antiflipper_cr_cc"):
         honest = headline(runs, "CIFAR10", "NON_IID", method)
-        faked = select(runs, experiment="A7_adaptive_report", dataset="CIFAR10", distribution="NON_IID", method=method) if method in ("antiflipper", "antiflipper_cc") else honest
+        uses_reports = method not in ("lfighter", "fltrust", "cc_only")
+        faked = select(runs, experiment="A7_adaptive_report", dataset="CIFAR10", distribution="NON_IID", method=method) if uses_reports else honest
         cells = [fmt(honest, "final_accuracy", 100), fmt(honest, "final_recall", 1, 2, pm=False),
                  fmt(faked, "final_accuracy", 100), fmt(faked, "final_recall", 1, 2, pm=False)]
         lines.append(f"{NAMES[method]} & " + " & ".join(cells) + r" \\")
@@ -152,7 +171,7 @@ def table_adaptive(runs) -> None:
 def table_cost(runs) -> None:
     lines = [
         r"\begin{table}[t]", r"\centering",
-        r"\caption{Measured cost per round for AntiFLipper-CC (mean over seeds). Client: report evaluation vs.\ local training time per client and their ratio. Server: defense time (cross-check, trust update and aggregation) and peak GPU memory of the job. Upload: extra bytes over FedAvg per client.}",
+        r"\caption{Measured cost per round for AntiFLipper-CR (mean over seeds). Client: report evaluation vs.\ local training time per client and their ratio. Server: defense time (cross-check, trust update and aggregation) and peak GPU memory of the job. Upload: extra bytes over FedAvg per client (accuracy plus per-class correct and count).}",
         r"\label{tab:cost}", r"\renewcommand{\arraystretch}{1.1}", r"\scriptsize", r"\setlength{\tabcolsep}{2.5pt}",
         r"\begin{tabular}{l|ccc|cc|c}", r"\hline",
         r"& \multicolumn{3}{c|}{\textbf{Client}} & \multicolumn{2}{c|}{\textbf{Server}} & \\",
@@ -160,10 +179,10 @@ def table_cost(runs) -> None:
         r" & (s) & (s) & (\%) & (ms) & (MB) & \\", r"\hline",
     ]
     for dataset, distribution, label in (("CIFAR10", "NON_IID", "CIFAR non-IID"), ("CIFAR10", "IID", "CIFAR IID"), ("MNIST", "NON_IID", "MNIST non-IID"), ("MNIST", "IID", "MNIST IID")):
-        rows = headline(runs, dataset, distribution, "antiflipper_cc")
+        rows = headline(runs, dataset, distribution, "antiflipper_cr")
         cells = [fmt(rows, "mean_client_eval_seconds", 1, 3, pm=False), fmt(rows, "mean_client_train_seconds", 1, 2, pm=False),
                  fmt(rows, "mean_client_eval_overhead", 100, 1, pm=False), fmt(rows, "mean_defense_seconds", 1000, 1, pm=False),
-                 fmt(rows, "peak_gpu_memory_mb", 1, 0, pm=False), "+4\\,B" if rows else DASH]
+                 fmt(rows, "peak_gpu_memory_mb", 1, 0, pm=False), "+84\\,B" if rows else DASH]
         lines.append(f"{label} & " + " & ".join(cells) + r" \\")
     lines += [r"\hline", r"\end{tabular}", r"\end{table}", ""]
     write("table_cost.tex", "\n".join(lines))
@@ -237,7 +256,7 @@ def figure_heterogeneity(runs) -> None:
     path = FIG / "gen_heterogeneity.pdf"
     fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.2))
     plotted = False
-    for method in ("antiflipper", "cc_only", "antiflipper_cc"):
+    for method in ("antiflipper", "antiflipper_budget", "cc_only", "antiflipper_cc", "antiflipper_cr", "antiflipper_cr_cc"):
         series = []
         for alpha in (0.1, 0.5, 1.0):
             mean, std, _ = stat(select(runs, experiment="A2_clean_heterogeneity", method=method, dirichlet_alpha=alpha), "final_fpr")
@@ -248,7 +267,7 @@ def figure_heterogeneity(runs) -> None:
             x, y, e = zip(*series)
             axes[0].errorbar(x, y, yerr=e, marker="o", ms=3, capsize=2, label=NAMES[method].replace(r"\textbf{", "").replace("}", ""))
     labels, values, errors = [], [], []
-    for method in ("fedavg", "lfighter", "fltrust", "cc_only", "antiflipper", "antiflipper_cc"):
+    for method in ("fedavg", "lfighter", "fltrust", "cc_only", "antiflipper", "antiflipper_budget", "antiflipper_cc", "antiflipper_cr", "antiflipper_cr_cc"):
         mean, std, _ = stat(select(runs, experiment="A2_attacked_heterogeneity", method=method), "final_accuracy", 100)
         if mean is not None:
             labels.append(NAMES[method].replace(r"\textbf{", "").replace("}", "").replace(r"$^\dagger$", "†")); values.append(mean); errors.append(std)
@@ -268,8 +287,8 @@ def figure_trajectories(runs) -> None:
     honest and faked reports, from client_history.csv (first seed available)."""
     plt = _style()
     path = FIG / "gen_trajectories.pdf"
-    panels = [("AntiFLipper, faked reports", select(runs, experiment="A7_adaptive_report", method="antiflipper")),
-              ("AntiFLipper-CC, faked reports", select(runs, experiment="A7_adaptive_report", method="antiflipper_cc"))]
+    panels = [("AntiFLipper, no attack, $\\alpha_D=0.1$", select(runs, experiment="A2_clean_heterogeneity", method="antiflipper", dirichlet_alpha=0.1)),
+              ("AntiFLipper-CR, no attack, $\\alpha_D=0.1$", select(runs, experiment="A2_clean_heterogeneity", method="antiflipper_cr", dirichlet_alpha=0.1))]
     panels = [(t, sorted(r, key=lambda x: x["seed"])) for t, r in panels]
     usable = [(t, r[0]["_dir"] / "client_history.csv") for t, r in panels if r and (r[0]["_dir"] / "client_history.csv").exists()]
     if not usable:
@@ -293,11 +312,8 @@ def figure_trajectories(runs) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", default="core")
     args = parser.parse_args()
-    runs = load_runs(args.profile)
-    if args.profile != "core":
-        runs += [r for r in load_runs("core") if r["job_id"] not in {x["job_id"] for x in runs}]
+    runs = [run for profile in PROFILES for run in load_runs(profile)]
     FIG.mkdir(parents=True, exist_ok=True)
     for build in (table_headline, table_detection, table_adaptive, table_cost, table_sensitivity,
                   figure_ratio, figure_heterogeneity, figure_trajectories):

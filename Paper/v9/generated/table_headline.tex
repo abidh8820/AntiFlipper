@@ -9,16 +9,18 @@
 & \multicolumn{2}{c|}{\textbf{CIFAR-10 (ResNet-18, 20 clients)}} & \multicolumn{2}{c|}{\textbf{MNIST (CNN, 100 clients)}} & \textbf{Defense time} \\
 \textbf{Method} & non-IID ($\alpha_D{=}1$) & IID & non-IID ($\alpha_D{=}1$) & IID & (ms, CIFAR non-IID) \\
 \hline
-FedAvg & -- & -- & -- & -- & -- \\
-Median & -- & -- & -- & -- & -- \\
-Multi-Krum & -- & -- & -- & -- & -- \\
-FLAME & -- & -- & -- & -- & -- \\
-LFighter & -- & -- & -- & -- & -- \\
-FLTrust$^\dagger$ & -- & -- & -- & -- & -- \\
+FedAvg & 17.50$\pm$2.28 & 52.61$\pm$36.38 & 33.83$\pm$56.11 & 0.63$\pm$0.21 & 34.2$\pm$0.7 \\
+Median & 60.29$\pm$2.98 & 60.00$\pm$5.73 & -- & -- & 355.7$\pm$4.4 \\
+Multi-Krum & 48.98$\pm$37.19 & 72.64$\pm$0.24 & -- & -- & 875.1$\pm$12.0 \\
+FLAME & 58.88$\pm$14.05 & 71.03$\pm$0.55 & -- & -- & 1058.5$\pm$13.4 \\
+LFighter & 50.54$\pm$24.36 & 73.41$\pm$0.07 & 98.49$\pm$0.11 & 98.74$\pm$0.11 & 41.7$\pm$3.8 \\
+FLTrust$^\dagger$ & 71.15$\pm$0.57 & 70.70$\pm$3.99 & 97.27$\pm$0.03 & 97.54$\pm$0.16 & 351.8$\pm$4.1 \\
 \hline
-CC only & -- & -- & -- & -- & -- \\
-AntiFLipper (reports) & -- & -- & -- & -- & -- \\
-\textbf{AntiFLipper-CC} & -- & -- & -- & -- & -- \\
+CC only & 68.40$\pm$5.24 & -- & -- & -- & 24.5$\pm$0.3 \\
+AntiFLipper-CC & 70.48$\pm$0.10 & 71.85$\pm$1.22 & 98.66$\pm$0.11 & 98.71$\pm$0.15 & 23.4$\pm$0.6 \\
+AntiFLipper (reports) & 71.12$\pm$0.30 & 73.28$\pm$0.25 & 98.67$\pm$0.10 & 98.71$\pm$0.15 & 23.5$\pm$0.8 \\
+AntiFLipper-CR+CC & -- & -- & -- & -- & -- \\
+\textbf{AntiFLipper-CR} & -- & -- & -- & -- & -- \\
 \hline
 \end{tabular}
 \end{table*}

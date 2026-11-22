@@ -1,28 +1,32 @@
-On the GPU machine (branch reduced-matrix-2026)
+On the GPU machine (Linux, branch reduced-matrix-2026)
 
-cd C:\Projeccts\AntiFlipper
-git fetch
-git checkout reduced-matrix-2026
+cd ~/Desktop/AAR/AntiFlipper
+
+# 1) The code changes made on this machine (FLAME fix, cc_v2) are already in the pushed
+#    commit "Sync GPU-machine code". Discard the local copies so the pull does not conflict.
+#    This touches code only; results/, analysis/ and checkpoints are not affected.
+git checkout -- Code_Journal_Experiments/antiflipper_exp Code_Journal_Experiments/cli.py Code_Journal_Experiments/self_test.py
 git pull
+
 cd Code_Journal_Experiments
+# export ANTIFLIPPER_PYTHON=/path/to/gpu-venv/bin/python3   # if python3 is not the GPU env
 
-# point to the CUDA python if it is not the active one
-$env:ANTIFLIPPER_PYTHON = "C:\path\to\gpu-env\python.exe"
+# 2) Run the class-residual experiments (84 jobs, ~34 GPU hours with 2 workers).
+#    The launcher runs the self-test first; it must print
+#    "All 231 completed core jobs in the 2026-11-22 backup keep their ids" only if the
+#    backup folder is present, and always "Manifest validation passed".
+./run_all.sh smoke          # optional, ~1 min pipeline check
+./run_all.sh cr 2           # terminal 1
 
-# 1) sanity: must print "Manifest validation passed: core=219 ... 6 completed"
-& $env:ANTIFLIPPER_PYTHON self_test.py
-# 2) pipeline smoke test (CPU-sized, ~1 min)
-.\run_all.cmd smoke
+./monitor.sh --profile cr   # terminal 2
 
-# Terminal 1: run core (219 jobs, priority order P1 -> P3). 2nd arg = parallel workers.
-.\run_all.cmd core 2
-
-# Terminal 2: monitor
-.\monitor.cmd core
-
-# Optional afterwards: full profile (+75 jobs)
-.\run_all.cmd full 2
+# The first 14 jobs (seed 7) are the pilot, ~6 hours. Look at them before waiting for the rest:
+python3 cli.py analyze --profile cr     # -> analysis/cr/REPORT.md
+# Key questions:
+#   - A2_clean_heterogeneity, alpha=0.1, antiflipper_cr: FPR low (old antiflipper: 0.92)?
+#   - A2_attacked_heterogeneity, alpha=0.1: accuracy above FedAvg's 44%?
+#   - A1_headline: still ~71% with recall 1.0?
 
 Ctrl+C is safe; re-run the same command to resume.
-To bring results back: git add results analysis CHECKLIST.md checklist.csv; git commit; git push
+To bring results back: git add results/cr analysis/cr && git commit -m "cr results" && git push
 (checkpoints and zip packages are git-ignored).

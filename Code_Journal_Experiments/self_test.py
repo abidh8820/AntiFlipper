@@ -7,6 +7,7 @@ from antiflipper_exp.manifest import build
 
 CORE_JOBS = 231
 FULL_JOBS = 306
+CR_JOBS = 84
 
 # Completed under the v1 manifest; the v2 manifest must keep their job ids so the
 # launcher skips them instead of re-running.
@@ -26,7 +27,10 @@ def main() -> None:
     assert len(core) == CORE_JOBS, len(core)
     assert len(full) == FULL_JOBS, len(full)
     assert len(cc_v2) == 12, len(cc_v2)
-    for jobs in (core, full, build("smoke"), cc_v2):
+    cr = build("cr")
+    assert len(cr) == CR_JOBS, len(cr)
+    assert not {j.job_id for j in cr} & {j.job_id for j in core}, "cr jobs must not shadow core jobs"
+    for jobs in (core, full, build("smoke"), cc_v2, cr):
         assert len({job.job_id for job in jobs}) == len(jobs)
         for job in jobs: job.validate()
         assert max(job.malicious_client_fraction for job in jobs) <= 0.4, "threat model caps attackers at 40%"
@@ -36,6 +40,11 @@ def main() -> None:
     missing = COMPLETED_V1 - ids
     assert not missing, f"completed v1 jobs no longer in manifest: {missing}"
     on_disk = {p.parent.name for p in (Path(__file__).parent / "results" / "core").glob("*/summary.json")}
+    backup = Path(__file__).resolve().parents[1] / "Results_Backup_2026-11-22" / "Code_Journal_Experiments" / "results" / "core"
+    if backup.exists():
+        done = {p.parent.name for p in backup.glob("*/summary.json")}
+        assert done <= ids, f"completed core jobs whose id changed: {sorted(done - ids)[:3]}"
+        print(f"All {len(done)} completed core jobs in the 2026-11-22 backup keep their ids.")
     print(f"Manifest validation passed: core={len(core)}, full={len(full)}, all IDs unique; "
           f"{len(ids & on_disk)} completed core results on disk will be skipped.")
 

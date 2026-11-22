@@ -184,7 +184,7 @@ def job_id(config: dict) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Live AntiFLipper experiment progress monitor")
-    parser.add_argument("--profile", choices=("smoke", "core", "full"), default="core")
+    parser.add_argument("--profile", choices=("smoke", "core", "full", "cc_v2", "cr"), default="core")
     parser.add_argument("--watch", action="store_true", help="refresh continuously")
     parser.add_argument("--interval", type=int, default=10, help="refresh interval in seconds")
     args = parser.parse_args()

@@ -21,7 +21,8 @@ from torch.utils.data import DataLoader, Dataset, Subset
 
 from .aggregators import AggregatorState, aggregate, update_consistency
 from .attacks import PartiallyPoisonedDataset
-from .config import ANTIFLIPPER_METHODS, CC_V2, CONSISTENCY_METHODS, HARD_EXCLUSION_METHODS, REPORT_METHODS, ExperimentConfig, LABEL_MAP
+from .config import (ANTIFLIPPER_METHODS, CC_V2, CONSISTENCY_METHODS, CR_METHODS, HARD_EXCLUSION_METHODS,
+                     REPORT_METHODS, REPORT_REPLACEMENT_METHODS, ExperimentConfig, LABEL_MAP)
 
 # Methods that make an explicit per-round keep/drop decision (zero weight = flagged).
 # FedAvg, Median and Trimmed Mean never classify clients, so they get no detection metrics.
@@ -41,6 +42,10 @@ class ClientResult:
     eval_seconds: float = 0.0
     train_seconds: float = 0.0
     eval_samples: int = 0
+    # Per-class correct predictions and sample counts of the report (labels as the
+    # client sees them). Used by the class-conditional residual (antiflipper_cr*).
+    class_correct: np.ndarray | None = None
+    class_count: np.ndarray | None = None
 
 
 def resolve_device(requested: str) -> torch.device:
@@ -138,7 +143,7 @@ def train_local(
     eval_data = _evaluation_subset(report_source, cfg.eval_fraction, local_seed + 23)
     _sync(device)
     eval_started = time.perf_counter()
-    reported_accuracy = _report_accuracy(model, eval_data, cfg.test_batch_size, device)
+    reported_accuracy, class_correct, class_count = _report_accuracy(model, eval_data, cfg.test_batch_size, device)
     _sync(device)
     eval_seconds = time.perf_counter() - eval_started
 
@@ -171,7 +176,7 @@ def train_local(
     state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
     del model
     return ClientResult(client_id, state, float(np.mean(losses)), reported_accuracy, attacked, poisoned_examples,
-                        eval_seconds, train_seconds, len(eval_data))
+                        eval_seconds, train_seconds, len(eval_data), class_correct, class_count)
 
 
 CLIENT_HISTORY_FIELDS = (
@@ -219,18 +224,24 @@ def _sync(device: torch.device) -> None:
         torch.cuda.synchronize(device)
 
 
+NUM_CLASSES = len(LABEL_MAP)
+
+
 @torch.no_grad()
-def _report_accuracy(model: nn.Module, dataset: Dataset, batch_size: int, device: torch.device) -> float:
-    """What a real client computes for its report: plain accuracy, nothing else.
-    Same batches and predictions as `evaluate`, so the value is identical; only the
-    timing is representative of the client-side cost."""
+def _report_accuracy(model: nn.Module, dataset: Dataset, batch_size: int, device: torch.device) -> tuple[float, np.ndarray, np.ndarray]:
+    """What a real client computes for its report: accuracy, plus per-class correct
+    and sample counts (two K-vectors of small integers) from the same forward pass.
+    Same batches and predictions as `evaluate`, so the accuracy value is identical."""
     model.eval()
-    correct = total = 0
+    class_correct = torch.zeros(NUM_CLASSES, dtype=torch.long, device=device)
+    class_count = torch.zeros(NUM_CLASSES, dtype=torch.long, device=device)
     for data, target in _loader(dataset, batch_size, False, 0):
         data, target = data.to(device), torch.as_tensor(target, device=device, dtype=torch.long)
-        correct += int((model(data).argmax(dim=1) == target).sum())
-        total += len(target)
-    return correct / max(total, 1)
+        hit = (model(data).argmax(dim=1) == target).long()
+        class_correct.index_add_(0, target, hit)
+        class_count.index_add_(0, target, torch.ones_like(target))
+    correct, count = class_correct.cpu().numpy(), class_count.cpu().numpy()
+    return int(correct.sum()) / max(int(count.sum()), 1), correct, count
 
 
 def _attack_occurs(cfg: ExperimentConfig, client_id: int, round_index: int) -> bool:
@@ -307,9 +318,52 @@ def _update_trust(
             counters[client_id] = 0
         if counters[client_id] >= cfg.counter_threshold:
             newly_excluded.add(client_id)
-            detection_round.setdefault(client_id, round_index)
+    # Exclusion budget: never exclude more than max_exclusion_fraction of all clients.
+    # If more clients qualify, the lowest-trust ones go first; the rest keep their
+    # counters and stay candidates. With the default 1.0 this is a no-op.
+    budget = int(np.floor(cfg.max_exclusion_fraction * len(trust) + 1e-9)) - len(excluded)
+    if len(newly_excluded) > budget:
+        newly_excluded = set(sorted(newly_excluded, key=lambda i: (trust[i], i))[:max(0, budget)])
+    for client_id in newly_excluded:
+        detection_round.setdefault(client_id, round_index)
     excluded.update(newly_excluded)
     _normalize_trust(trust, excluded)
+
+
+def _report_bytes(method: str) -> int:
+    """Extra upload over FedAvg per client and round: one float32 accuracy, plus two
+    int32 K-vectors (per-class correct and count) for the class-residual methods."""
+    if method in CR_METHODS:
+        return 4 + 2 * 4 * NUM_CLASSES
+    return 4 if method in REPORT_METHODS else 0
+
+
+def _class_residuals(results: list["ClientResult"], trust: dict[int, float]) -> dict[int, float]:
+    """Class-conditional residual of each report (antiflipper_cr*).
+
+    a_hat[k] is the global model's accuracy on class k pooled over the reporting clients,
+    weighted by their current trust (so down-weighted clients count less). A client's
+    expected accuracy is a_hat averaged over its own label mix; the residual is what it
+    reported minus that expectation. An honest client holding hard or rare classes has a
+    low expectation too (residual ~ 0); a flipper whose images of class k carry label
+    pi(k) scores ~0 on labels the model otherwise gets right (residual << 0).
+    """
+    correct = np.stack([x.class_correct for x in results]).astype(float)
+    count = np.stack([x.class_count for x in results]).astype(float)
+    weights = np.asarray([max(trust.get(x.client_id, 0.0), 0.0) for x in results])
+    if weights.sum() <= 0:
+        weights = np.ones(len(results))
+    pooled_count = weights @ count
+    defined = pooled_count > 0
+    class_accuracy = np.zeros(count.shape[1])
+    class_accuracy[defined] = (weights @ correct)[defined] / pooled_count[defined]
+    residuals: dict[int, float] = {}
+    for row, result in enumerate(results):
+        mask = defined & (count[row] > 0)
+        total = count[row, mask].sum()
+        expected = float(count[row, mask] @ class_accuracy[mask] / total) if total > 0 else result.reported_accuracy
+        residuals[result.client_id] = result.reported_accuracy - expected
+    return residuals
 
 
 def _update_cc_v2(
@@ -500,12 +554,15 @@ def run_experiment(
             # Server-side defense work before aggregation (trust update, cross-check) is
             # timed so AntiFLipper's reported cost is not just the weighted average.
             defense_started = time.perf_counter()
+            if cfg.method in CR_METHODS:
+                # Compare each client with the accuracy expected for its own label mix.
+                reports = _class_residuals(client_results, trust)
             inconsistent_ids: list[int] = []
             if cfg.method in CONSISTENCY_METHODS:
                 similarity_values, inconsistent = update_consistency([x.state for x in client_results], global_cpu, cfg.consistency_z)
                 similarities = {x.client_id: float(v) for x, v in zip(client_results, similarity_values)}
                 inconsistent_ids = [x.client_id for x, bad in zip(client_results, inconsistent) if bad]
-                if inconsistent_ids and cfg.method == "antiflipper_cc":
+                if inconsistent_ids and cfg.method in REPORT_REPLACEMENT_METHODS:
                     # A report that disagrees with the client's own update is not believed:
                     # it is replaced with the round's worst report before the trust update.
                     floor = min(reports.values())
@@ -579,7 +636,7 @@ def run_experiment(
                 # Communication: every selected client downloads the global model and uploads
                 # its update (+4-byte accuracy scalar for report-based methods).
                 "download_bytes": len(selected) * model_bytes,
-                "upload_bytes": len(selected) * (model_bytes + (4 if cfg.method in REPORT_METHODS else 0)),
+                "upload_bytes": len(selected) * (model_bytes + _report_bytes(cfg.method)),
                 "test_eval_seconds": test_eval_seconds,
                 "selected_clients": len(selected), "aggregated_clients": len(admitted), "excluded_clients": len(excluded),
                 "attacked_client_rounds": sum(x.attacked for x in client_results),
@@ -658,7 +715,7 @@ def run_experiment(
             # Per-client upload per round: full model (float32) for everyone, plus one
             # float32 accuracy scalar for AntiFLipper variants.
             "model_parameters": parameter_count,
-            "upload_bytes_per_client_round": model_bytes + (4 if cfg.method in REPORT_METHODS else 0),
+            "upload_bytes_per_client_round": model_bytes + _report_bytes(cfg.method),
             "final_surviving_clients": cfg.num_clients - len(excluded),
             "mean_round_seconds": float(np.mean([x["round_seconds"] for x in rows])),
             # Rounds restored from a pre-timing checkpoint lack these columns; _mean skips them.

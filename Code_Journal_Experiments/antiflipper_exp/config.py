@@ -13,11 +13,18 @@ LABEL_MAP = {0: 1, 1: 0, 2: 3, 3: 2, 4: 5, 5: 4, 6: 7, 7: 6, 8: 9, 9: 8}
 #   antiflipper     accuracy reports only (submitted method)
 #   antiflipper_cc  accuracy reports + update-consistency cross-check (proposed)
 #   cc_only         ablation: consistency cross-check only, reports ignored, uniform weights
+#   antiflipper_cc_v2  strike-based soft weighting driven by the cross-check (GPU-side variant)
+#   antiflipper_cr     class-conditional residual: a client is compared with the accuracy
+#                      expected for its own label mix, not with the population mean
+#   antiflipper_cr_cc  class-conditional residual + update-consistency cross-check
 CC_V2 = "antiflipper_cc_v2"
-HARD_EXCLUSION_METHODS = {"antiflipper", "antiflipper_cc", "cc_only"}
+CR_METHODS = {"antiflipper_cr", "antiflipper_cr_cc"}
+HARD_EXCLUSION_METHODS = {"antiflipper", "antiflipper_cc", "cc_only"} | CR_METHODS
 ANTIFLIPPER_METHODS = HARD_EXCLUSION_METHODS | {CC_V2}
-CONSISTENCY_METHODS = {"antiflipper_cc", "cc_only", CC_V2}
-REPORT_METHODS = {"antiflipper", "antiflipper_cc", CC_V2}
+CONSISTENCY_METHODS = {"antiflipper_cc", "cc_only", CC_V2, "antiflipper_cr_cc"}
+REPORT_METHODS = {"antiflipper", "antiflipper_cc", CC_V2} | CR_METHODS
+# Methods whose inconsistent clients get their report replaced by the round minimum.
+REPORT_REPLACEMENT_METHODS = {"antiflipper_cc", "antiflipper_cr_cc"}
 # Threat model: at most 40% of clients are malicious.
 MAX_MALICIOUS_FRACTION = 0.4
 KNOWN_METHODS = ANTIFLIPPER_METHODS | {"fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust"}
@@ -25,7 +32,7 @@ KNOWN_METHODS = ANTIFLIPPER_METHODS | {"fedavg", "median", "trimmed_mean", "fool
 # Fields added after the first experiments were run. They are omitted from the
 # canonical form (and therefore from the config hash / job id) while they hold
 # their default value, so already-completed jobs keep their identity.
-_LATE_FIELDS_DEFAULTS = {"report_strategy": "honest", "consistency_z": 2.5}
+_LATE_FIELDS_DEFAULTS = {"report_strategy": "honest", "consistency_z": 2.5, "max_exclusion_fraction": 1.0}
 
 
 @dataclass(frozen=True)
@@ -70,6 +77,11 @@ class ExperimentConfig:
     report_strategy: str = "honest"
     # antiflipper_cc only: robust z-score cut-off for the update-consistency cross-check.
     consistency_z: float = 2.5
+    # Upper bound on the fraction of all clients that may ever be excluded. Tied to the
+    # threat model (<=40% malicious): beyond it, exclusions are more likely to be honest
+    # skewed clients, and each one removes classes from training (exclusion cascade).
+    # 1.0 = no budget (all methods before antiflipper_cr).
+    max_exclusion_fraction: float = 1.0
 
     def validate(self) -> None:
         if self.method not in KNOWN_METHODS:
@@ -78,6 +90,8 @@ class ExperimentConfig:
             raise ValueError("report_strategy must be honest or clean_labels")
         if self.consistency_z <= 0:
             raise ValueError("consistency_z must be positive")
+        if not 0 < self.max_exclusion_fraction <= 1:
+            raise ValueError("max_exclusion_fraction must be in (0, 1]")
         if self.malicious_client_fraction > MAX_MALICIOUS_FRACTION + 1e-9:
             raise ValueError(f"malicious_client_fraction above the {MAX_MALICIOUS_FRACTION:.0%} threat-model bound")
         if self.dataset not in {"MNIST", "CIFAR10", "SYNTHETIC"}:

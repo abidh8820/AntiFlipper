@@ -130,3 +130,43 @@ Each entry: date, what was discussed/done, decisions, and next steps.
 
 - Added cleanup after final outputs and completion state are saved. Unfinished jobs retain their checkpoint, and the launcher retries completed-job cleanup after an interruption. Verified retention, resume, and cleanup on a two-round synthetic job.
 - Reloaded the core service at safe round boundaries. Both GPU workers resumed from round 13, and boot startup remains enabled.
+
+## 2026-11-22 — core results reviewed (Results_Backup_2026-11-22)
+
+- The core run completed: 231/231 jobs (the GPU side extended the manifest to 231). The 3 "failed" states were early FLAME attempts that were re-run successfully. A `cc_v2` profile (method `antiflipper_cc_v2`, 12 jobs) exists only as a manifest; nothing has run and its code is not in the repo. Ask the user what it is.
+- Findings (CIFAR-10 non-IID, 40% attackers, 3 seeds):
+  - **Plain AntiFLipper is the strongest result.** It ties or tops accuracy in all 4 settings (71.1±0.3 CIFAR non-IID vs FLTrust 71.2 with root data; LFighter 50.5±24.4, Krum 49.0±37.2, FLAME 58.9±14.1) with the lowest variance, recall 1.0, FPR 0.08, and 23 ms defense time vs 42 (LFighter), 352+115 root (FLTrust), 875 (Krum), 1058 (FLAME).
+  - **AntiFLipper-CC hurts at z=2.5:** FPR 0.25 non-IID / 0.36 IID, slightly lower accuracy. The MNIST sensitivity runs show z=3.0 brings FPR to 0.01–0.05 with recall 1.0, so the default z was too aggressive.
+  - **Report faking on CIFAR only partly evades plain AntiFLipper:** recall 0.67, accuracy 72.6, ASR 3.5%. Likely cause: ResNet memorizes attackers' flipped training samples, so clean-label reports still come out lower. Prop. 2 in v9 must be qualified. CC raises recall to 0.88 at the cost of FPR 0.17.
+  - **Strong heterogeneity breaks the report signal.** At α_D=0.1, clean AntiFLipper FPR is 0.92 (acc 16.9%) and attacked accuracy 13.2% vs FedAvg 43.9%; at α_D=0.5, FPR is 0.80. cc_only is robust when clean (FPR 0.05) but does not detect attacks at α_D=0.1.
+  - Final-round accuracy is noisy (one p=0.3 seed: final 23%, last-10 mean 67.6%); consider last-10 as the headline metric.
+  - Client report overhead measured at 9% (CIFAR) and 24% (MNIST), vs 11% analytic.
+- **Next:** decide the paper framing (plain AntiFLipper as the main method; CC as an extension/trade-off) and whether to run CC with z=3 on CIFAR and/or a heterogeneity-aware report fix.
+- User asked whether the results are publishable. Verdict given: yes at mid-tier (IEEE Access, ICC/GLOBECOM workshops, regional IEEE conferences) if the paper leads with plain AntiFLipper and states the α_D≤0.5 failure honestly; still borderline at main-track GLOBECOM (novelty concern unresolved). Fixing the heterogeneity failure (self-referenced trust) is the change that would make it clearly publishable.
+- User asked whether another dataset helps. Answer: only a little for acceptance (it addresses R1's domain comment, not novelty or the α_D≤0.5 failure). If adding one, use a naturally partitioned, IoT-relevant dataset: UCI HAR (30 subjects, 6 classes, tiny model, cheap) or FEMNIST. Run a cheap pilot first, because natural non-IID may trigger the same false-positive failure. Code assumes 10 classes (LABEL_MAP, evaluate per-class arrays), so it needs a small generalization.
+- Heterogeneity-fix design discussed (not implemented yet):
+  - Diagnosis: comparing each client with the population mean penalizes honest clients that hold hard or rare classes, and permanent exclusion removes those classes from training, which pushes the next clients down (cascade, FPR 0.92 at α_D=0.1).
+  - Correction: the earlier "self-referenced trust" idea does NOT catch static attackers (present from round 0); keep it only for dynamic attacks.
+  - Proposal:
+    1. Class-conditional residual: clients report per-class (correct, count); the server pools per-class accuracy robustly (per-class median or trust-weighted); the signal is acc_j minus the expected acc given the client's own label mix. Cost: 2K small ints (≈80 B for K=10), O(NK) on the server. Privacy option: broadcast the pooled per-class accuracy and let the client report only the scalar residual (label histogram stays local).
+    2. Exclusion budget equal to the 40% threat-model bound, plus soft down-weighting before exclusion, to stop the cascade.
+    3. Keep CC (z=3.0) as the backstop against report faking.
+  - Validation: pilot ~6 CIFAR jobs (α_D=0.1 clean and attacked, α_D=1 headline, 1 seed), then about 60 jobs.
+
+## 2026-11-22 (session 2) — class-conditional residual (AntiFLipper-CR) implemented
+
+- Found that the GPU machine had unpushed code: a FLAME fix (BatchNorm buffers no longer clipped or noised), `antiflipper_cc_v2` (strike-based soft weights), and 12 cc_v2 jobs inserted into core (hence 231). Recovered it from the source snapshot in the results package and committed it as "Sync GPU-machine code" (840ac4e).
+- cc_v2 results:
+  - clean α_D=0.1: FPR 0, acc 62.7% (≈ the no-defense reference);
+  - headline: recall 0, attackers keep 35% of the weight, acc 49±33%.
+  - ⇒ The update check alone does not detect attackers; the report signal is needed but must stop penalizing label mix.
+- Implemented `antiflipper_cr` and `antiflipper_cr_cc` (z=3.0):
+  - clients report per-class (correct, count) (+84 B/round);
+  - the server pools trust-weighted per-class accuracy, computes each client's expected accuracy for its label mix, and feeds the residual into the unchanged trust/counter pipeline;
+  - new `max_exclusion_fraction` (default 1.0 = old behavior; CR uses 0.4, lowest trust excluded first).
+  - Unit check: honest hard-class clients go from −0.275 raw deviation to 0.000 residual.
+  - All 231 completed core job ids are unchanged (self-test checks this against the backup).
+- New `cr` profile (84 jobs, ~34 GPU h, seed-major): the first 14 = seed-7 pilot (~6 h); includes the budget-only and CC-z=3 ablations. Added the Linux launcher `run_all.sh`; the monitor and run_all.ps1 know the `cr` and `cc_v2` profiles.
+- `Paper/v9/make_results.py` now reads core + cr from both results/ and the backup, and keeps the ablation variants separate. Paper text is NOT reframed yet (wait for CR results).
+- .gitignore: `Results_Backup_*/` and `ssh.txt` (local only).
+- GPU machine: run `git checkout --` on the code paths before pulling (their local edits are already in 840ac4e), then `./run_all.sh cr 2`.

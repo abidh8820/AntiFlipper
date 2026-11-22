@@ -9,7 +9,7 @@ from .config import CC_V2, ExperimentConfig
 
 
 SEEDS = (7, 19, 31)
-PROFILES = ("smoke", "core", "full", "cc_v2")
+PROFILES = ("smoke", "core", "full", "cc_v2", "cr")
 # Held out from every reported comparison; used only for hyperparameter sensitivity.
 SENSITIVITY_SEEDS = (101, 113, 127)
 
@@ -48,6 +48,8 @@ def smoke_jobs() -> list[ExperimentConfig]:
         ExperimentConfig(experiment="smoke", method="antiflipper_cc", report_strategy="clean_labels", **common),
         ExperimentConfig(experiment="smoke", method="cc_only", **common),
         ExperimentConfig(experiment="smoke", method="lfighter", **common),
+        ExperimentConfig(experiment="smoke", method="antiflipper_cr", max_exclusion_fraction=0.4, **common),
+        ExperimentConfig(experiment="smoke", method="antiflipper_cr_cc", max_exclusion_fraction=0.4, consistency_z=3.0, report_strategy="clean_labels", **common),
     ]
 
 
@@ -144,9 +146,54 @@ def cc_v2_jobs(reference: list[ExperimentConfig]) -> list[ExperimentConfig]:
     ]
 
 
+# --- Class-conditional residual (Nov 22) --------------------------------------------
+# Core results showed report-based AntiFLipper excluding up to 92% of honest clients at
+# Dirichlet 0.1 (clients holding hard classes look like attackers; each exclusion removes
+# classes and drags the next clients down). antiflipper_cr compares each client with the
+# accuracy expected for its own label mix and caps exclusions at the 40% threat bound.
+CR = {"method": "antiflipper_cr", "max_exclusion_fraction": 0.4}
+CR_CC = {"method": "antiflipper_cr_cc", "max_exclusion_fraction": 0.4, "consistency_z": 3.0}
+# Ablations: is it the residual or the budget? Does z=3 alone fix the old CC?
+BUDGET_ONLY = {"method": "antiflipper", "max_exclusion_fraction": 0.4, "notes": "budget only"}
+CC_Z3 = {"method": "antiflipper_cc", "consistency_z": 3.0}
+
+
+def cr_jobs() -> list[ExperimentConfig]:
+    """Priority-ordered. The first 14 jobs (seed 7) are a pilot that answers whether the
+    fix works in ~6 GPU hours; then the same settings for seeds 19 and 31; then coverage."""
+    def job(dataset, distribution, seed, experiment, variant, tags, **overrides):
+        return replace(base(dataset, distribution, variant["method"], seed, experiment),
+                       tags=tags, **{**{k: v for k, v in variant.items() if k != "method"}, **overrides})
+
+    key_settings = (  # (experiment, overrides, variants)
+        ("A2_clean_heterogeneity", {"dirichlet_alpha": 0.1, "malicious_client_fraction": 0.0}, (CR, CR_CC, BUDGET_ONLY, CC_Z3)),
+        ("A2_attacked_heterogeneity", {"dirichlet_alpha": 0.1}, (CR, CR_CC, BUDGET_ONLY)),
+        ("A1_headline", {}, (CR, CR_CC, CC_Z3)),
+        ("A7_adaptive_report", {"report_strategy": "clean_labels"}, (CR, CR_CC)),
+        ("A2_clean_heterogeneity", {"dirichlet_alpha": 0.5, "malicious_client_fraction": 0.0}, (CR, CR_CC)),
+    )
+    jobs: list[ExperimentConfig] = []
+    for seed in SEEDS:  # seed-major: seed 7 = pilot
+        for experiment, overrides, variants in key_settings:
+            for variant in variants:
+                tags = ("CR", "pilot" if seed == SEEDS[0] else "key")
+                jobs.append(job("CIFAR10", "NON_IID", seed, experiment, variant, tags, **overrides))
+    for variant, seed in itertools.product((CR, CR_CC), SEEDS):
+        jobs.append(job("CIFAR10", "NON_IID", seed, "A2_clean_heterogeneity", variant, ("CR", "coverage"), dirichlet_alpha=1.0, malicious_client_fraction=0.0))
+    for variant, ratio, seed in itertools.product((CR, CR_CC), RATIO_SWEEP, SEEDS):
+        jobs.append(job("CIFAR10", "NON_IID", seed, "A3_malicious_ratio", variant, ("CR", "coverage"), malicious_client_fraction=ratio))
+    for variant, seed in itertools.product((CR, CR_CC), SEEDS):
+        jobs.append(job("CIFAR10", "IID", seed, "A1_headline", variant, ("CR", "coverage")))
+    for distribution, variant, seed in itertools.product(("NON_IID", "IID"), (CR, CR_CC), SEEDS):
+        jobs.append(job("MNIST", distribution, seed, "A1_headline", variant, ("CR", "coverage")))
+    return _dedupe(jobs)
+
+
 def build(profile: str) -> list[ExperimentConfig]:
     if profile == "smoke":
         return smoke_jobs()
+    if profile == "cr":
+        return cr_jobs()
     if profile not in PROFILES:
         raise ValueError(f"Unknown profile: {profile}")
     reference = core_jobs()
