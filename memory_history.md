@@ -182,3 +182,9 @@ Each entry: date, what was discussed/done, decisions, and next steps.
   - **Budget only: 8/20 excluded (the cap), 13.4%** ⇒ the residual, not the budget, fixes it.
   - CR+CC: 0 excluded, last-10 45.1%, final 10.3% = a one-round oscillation dip (56% at round 98).
   - CR weights stay ~uniform (≈5% each). Confirms using the last-10 mean as the headline metric.
+
+## 2026-11-22 (monitor default)
+- User reported `monitor.sh` over SSH showed the old run: it defaulted to `--profile core`.
+- Fixed: monitor.py now defaults to the profile with the most recent `state.json` activity (cr now, fltrust_fix later); `--profile` still overrides. Deployed to GPU PC via bundle (GPU at 3f9d9e5); service untouched.
+- CR status at 15:57: 10/84 done, 0 failed; A7 adaptive seed-7 jobs running.
+- Next: check attacked α0.1 + headline pilot results (already complete on GPU).
