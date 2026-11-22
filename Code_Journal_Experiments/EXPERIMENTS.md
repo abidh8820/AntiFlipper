@@ -76,6 +76,17 @@ gave 1–5% FPR at recall 1.0, vs 13–15% FPR for z=2.5.
 "Budget only" (plain AntiFLipper with the 40% cap) and "CC z=3" are ablations: they show whether the residual,
 the budget or the threshold produces any improvement. All other settings reuse the completed core runs as baselines.
 
+## FLTrust-fix profile — 18 jobs
+
+The core FLTrust aggregator rescaled every floating tensor, including BatchNorm running statistics, by
+`root_norm / client_norm`. On ResNet-18 this distorted the BN statistics and gave 1–7 NaN-loss rounds in most
+CIFAR-10 runs (accuracy recovered, but the baseline was not clean). Scores and rescaling now use trainable
+parameters only, and BN buffers are the score-weighted average of the clients' buffers. All 18 CIFAR-10 FLTrust
+jobs are re-run with `notes="bn-safe"`; `Paper/v9/make_results.py` prefers them over the core runs. MNIST's CNN
+has no BatchNorm and is unaffected.
+
+**Queue on the GPU machine:** `antiflipper-cr.service` (systemd user service, 3 workers) runs `run_queue.sh cr fltrust_fix`.
+
 ## AntiFLipper-CC
 
 Same as AntiFLipper, plus a server-side cross-check of each report. The last-layer update of each

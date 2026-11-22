@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("smoke", "core", "full", "cc_v2", "cr")]
+    [ValidateSet("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix")]
     [string]$Profile = "core",
     [string]$Python = $env:ANTIFLIPPER_PYTHON,
     [ValidateRange(1, 64)]

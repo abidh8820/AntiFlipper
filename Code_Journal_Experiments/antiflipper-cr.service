@@ -1,0 +1,25 @@
+# systemd user service for the GPU machine. Install:
+#   cp antiflipper-cr.service ~/.config/systemd/user/ && systemctl --user daemon-reload
+#   systemctl --user enable --now antiflipper-cr.service
+# Logs: journalctl --user -u antiflipper-cr -f      Stop safely: systemctl --user stop antiflipper-cr
+[Unit]
+Description=AntiFlipper CR + FLTrust-fix experiment queue
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+WorkingDirectory=/home/ndag/Desktop/AAR/AntiFlipper/Code_Journal_Experiments
+Environment=PYTHONPATH=/home/ndag/.venvs/lightdp-flower-gpu/lib/python3.12/site-packages:/home/ndag/miniconda3/envs/rsa_conda/lib/python3.12/site-packages
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=ANTIFLIPPER_PYTHON=/usr/bin/python3.12
+Environment=WORKERS=3
+ExecStartPre=/usr/bin/python3.12 -c 'import sys, torch; sys.exit(0 if torch.cuda.is_available() else "CUDA unavailable; will retry")'
+ExecStart=/bin/bash run_queue.sh cr fltrust_fix
+Restart=on-failure
+RestartSec=60s
+KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=default.target

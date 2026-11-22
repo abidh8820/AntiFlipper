@@ -9,7 +9,7 @@ from .config import CC_V2, ExperimentConfig
 
 
 SEEDS = (7, 19, 31)
-PROFILES = ("smoke", "core", "full", "cc_v2", "cr")
+PROFILES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix")
 # Held out from every reported comparison; used only for hyperparameter sensitivity.
 SENSITIVITY_SEEDS = (101, 113, 127)
 
@@ -189,11 +189,21 @@ def cr_jobs() -> list[ExperimentConfig]:
     return _dedupe(jobs)
 
 
+def fltrust_fix_jobs() -> list[ExperimentConfig]:
+    """Re-run every CIFAR-10 FLTrust job of core with the BatchNorm-safe aggregator.
+    The core runs rescaled BN running statistics and had 1-7 NaN-loss rounds per run.
+    notes="bn-safe" gives them distinct job ids; MNIST (no BatchNorm) is unaffected."""
+    return [replace(job, notes="bn-safe", tags=("FLTRUST_FIX",))
+            for job in core_jobs() if job.method == "fltrust" and job.dataset == "CIFAR10"]
+
+
 def build(profile: str) -> list[ExperimentConfig]:
     if profile == "smoke":
         return smoke_jobs()
     if profile == "cr":
         return cr_jobs()
+    if profile == "fltrust_fix":
+        return fltrust_fix_jobs()
     if profile not in PROFILES:
         raise ValueError(f"Unknown profile: {profile}")
     reference = core_jobs()

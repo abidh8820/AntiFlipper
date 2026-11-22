@@ -36,7 +36,7 @@ NAMES = {
 }
 HEADLINE_ORDER = ["fedavg", "median", "multi_krum", "flame", "lfighter", "fltrust", "cc_only", "antiflipper_cc", "antiflipper", "antiflipper_cr_cc", "antiflipper_cr"]
 SWEEP_ORDER = ["fedavg", "lfighter", "fltrust", "antiflipper", "antiflipper_cr"]
-PROFILES = ("core", "cr")
+PROFILES = ("core", "cr", "fltrust_fix")
 DASH = "--"
 
 
@@ -314,6 +314,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
     runs = [run for profile in PROFILES for run in load_runs(profile)]
+    # Prefer BatchNorm-safe FLTrust re-runs over the core runs they replace.
+    def setting(r):
+        return (r["experiment"], r["dataset"], r["distribution"], r["dirichlet_alpha"], r["malicious_client_fraction"], r["seed"])
+    fixed = {setting(r) for r in runs if r["method"] == "fltrust" and r.get("notes") == "bn-safe"}
+    runs = [r for r in runs if not (r["method"] == "fltrust" and r.get("notes") != "bn-safe" and setting(r) in fixed)]
     FIG.mkdir(parents=True, exist_ok=True)
     for build in (table_headline, table_detection, table_adaptive, table_cost, table_sensitivity,
                   figure_ratio, figure_heterogeneity, figure_trajectories):

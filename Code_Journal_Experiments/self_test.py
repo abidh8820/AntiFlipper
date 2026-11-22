@@ -27,10 +27,12 @@ def main() -> None:
     assert len(core) == CORE_JOBS, len(core)
     assert len(full) == FULL_JOBS, len(full)
     assert len(cc_v2) == 12, len(cc_v2)
+    fix = build("fltrust_fix")
+    assert len(fix) == 18 and all(j.method == "fltrust" and j.notes == "bn-safe" for j in fix), len(fix)
     cr = build("cr")
     assert len(cr) == CR_JOBS, len(cr)
     assert not {j.job_id for j in cr} & {j.job_id for j in core}, "cr jobs must not shadow core jobs"
-    for jobs in (core, full, build("smoke"), cc_v2, cr):
+    for jobs in (core, full, build("smoke"), cc_v2, cr, fix):
         assert len({job.job_id for job in jobs}) == len(jobs)
         for job in jobs: job.validate()
         assert max(job.malicious_client_fraction for job in jobs) <= 0.4, "threat model caps attackers at 40%"

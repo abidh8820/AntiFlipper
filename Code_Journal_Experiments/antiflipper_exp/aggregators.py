@@ -247,22 +247,35 @@ def update_consistency(states: list[State], global_state: State, z_cut: float) -
     return similarity, robust_z < -z_cut
 
 
-def fltrust(states: list[State], global_state: State, root_state: State) -> tuple[State, np.ndarray]:
-    root_delta = flatten_delta(root_state, global_state)
+def fltrust(states: list[State], global_state: State, root_state: State,
+            parameter_keys: tuple[str, ...] | None = None) -> tuple[State, np.ndarray]:
+    """FLTrust. Trust scores and norm rescaling use trainable parameters only.
+
+    Rescaling every floating tensor (the earlier version) also rescaled BatchNorm
+    running-variance updates by root_norm / client_norm, which can drive a variance
+    negative and produced NaN test losses on ResNet-18. Floating buffers are now the
+    score-weighted average of the clients' buffers, which keeps variances positive.
+    """
+    keys = tuple(parameter_keys) if parameter_keys else tuple(_float_keys(global_state))
+    root_delta = flatten_delta(root_state, global_state, keys)
     root_norm = torch.linalg.vector_norm(root_delta).clamp_min(1e-12)
-    client_deltas = [flatten_delta(state, global_state) for state in states]
+    client_deltas = [flatten_delta(state, global_state, keys) for state in states]
     scores = np.asarray([max(0.0, float(torch.dot(delta, root_delta) / (torch.linalg.vector_norm(delta).clamp_min(1e-12) * root_norm))) for delta in client_deltas])
     if scores.sum() <= 0:
         return copy.deepcopy(global_state), scores
     result = copy.deepcopy(global_state)
     scores /= scores.sum()
     client_norms = [torch.linalg.vector_norm(delta).clamp_min(1e-12) for delta in client_deltas]
-    for key in _float_keys(result):
+    for key in keys:
         aggregate = torch.zeros_like(result[key])
         for score, state, delta_norm in zip(scores, states, client_norms):
             delta = state[key] - global_state[key]
             aggregate.add_(delta * (root_norm / delta_norm), alpha=float(score))
         result[key] = global_state[key] + aggregate
+    parameters = set(keys)
+    for key in _float_keys(result):
+        if key not in parameters:
+            result[key] = sum(float(score) * state[key] for score, state in zip(scores, states))
     return result, scores
 
 
@@ -303,5 +316,5 @@ def aggregate(
     if method == "fltrust":
         if root_state is None:
             raise ValueError("FLTrust requires a root update")
-        return fltrust(states, global_state, root_state)
+        return fltrust(states, global_state, root_state, parameter_keys)
     raise ValueError(f"Unknown aggregation method: {method}")
