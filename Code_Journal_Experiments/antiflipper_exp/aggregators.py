@@ -7,6 +7,8 @@ from typing import Any
 import numpy as np
 import torch
 
+from .config import ANTIFLIPPER_METHODS
+
 
 State = dict[str, torch.Tensor]
 
@@ -53,8 +55,10 @@ def trimmed_mean(states: list[State], trim_fraction: float) -> State:
     return result
 
 
-def flatten_delta(state: State, global_state: State) -> torch.Tensor:
-    chunks = [(state[k].detach().float().cpu() - global_state[k].detach().float().cpu()).reshape(-1) for k in _float_keys(global_state)]
+def flatten_delta(state: State, global_state: State, keys: tuple[str, ...] | None = None) -> torch.Tensor:
+    if keys is None:
+        keys = tuple(_float_keys(global_state))
+    chunks = [(state[k].detach().float().cpu() - global_state[k].detach().float().cpu()).reshape(-1) for k in keys]
     return torch.cat(chunks)
 
 
@@ -174,7 +178,7 @@ def lfighter(states: list[State], global_state: State) -> tuple[State, np.ndarra
     return weighted_average(states, weights), weights
 
 
-def flame(states: list[State], global_state: State, seed: int) -> tuple[State, np.ndarray]:
+def flame(states: list[State], global_state: State, seed: int, parameter_keys: tuple[str, ...]) -> tuple[State, np.ndarray]:
     try:
         import hdbscan
         clusterer = hdbscan.HDBSCAN(min_cluster_size=len(states) // 2 + 1, min_samples=1, allow_single_cluster=True)
@@ -186,23 +190,27 @@ def flame(states: list[State], global_state: State, seed: int) -> tuple[State, n
             raise RuntimeError("FLAME requires either hdbscan or scikit-learn with sklearn.cluster.HDBSCAN") from exc
     from sklearn.metrics.pairwise import cosine_similarity
 
-    deltas = np.stack([flatten_delta(state, global_state).numpy() for state in states])
+    deltas = np.stack([flatten_delta(state, global_state, parameter_keys).numpy() for state in states])
     similarities = cosine_similarity(deltas)
     labels = clusterer.fit_predict(similarities)
     benign = np.arange(len(states)) if np.all(labels == -1) else np.flatnonzero(labels != -1)
     norms = np.linalg.norm(deltas, axis=1)
     clip = float(np.median(norms))
+    parameters = set(parameter_keys)
+    buffer_keys = [key for key in _float_keys(global_state) if key not in parameters]
     clipped: list[State] = []
     for index in benign:
         scale = min(1.0, clip / max(float(norms[index]), 1e-12))
-        value = copy.deepcopy(global_state)
-        for key in _float_keys(value):
+        value = dict(global_state)
+        # Average accepted clients' floating buffers without clipping or adding noise.
+        value.update({key: states[index][key] for key in buffer_keys})
+        for key in parameter_keys:
             value[key] = global_state[key] + (states[index][key] - global_state[key]) * scale
         clipped.append(value)
     result = weighted_average(clipped, np.ones(len(clipped)))
     sigma = 0.001 * clip
     generator = torch.Generator(device="cpu").manual_seed(seed)
-    for key in _float_keys(result):
+    for key in parameter_keys:
         noise = torch.randn(result[key].shape, generator=generator, dtype=result[key].dtype) * sigma
         result[key] += noise.to(result[key].device)
     weights = np.zeros(len(states)); weights[benign] = 1
@@ -269,11 +277,12 @@ def aggregate(
     trust_weights: list[float] | None = None,
     root_state: State | None = None,
     seed: int = 0,
+    parameter_keys: tuple[str, ...] | None = None,
 ) -> tuple[State, np.ndarray]:
     n = len(states)
     if method == "fedavg":
         weights = np.ones(n); return weighted_average(states, weights), weights
-    if method in ("antiflipper", "antiflipper_cc", "cc_only"):
+    if method in ANTIFLIPPER_METHODS:
         weights = np.asarray(trust_weights, dtype=float); return weighted_average(states, weights), weights
     if method == "median":
         return coordinate_median(states), np.ones(n)
@@ -288,7 +297,9 @@ def aggregate(
     if method == "lfighter":
         return lfighter(states, global_state)
     if method == "flame":
-        return flame(states, global_state, seed)
+        if not parameter_keys:
+            raise ValueError("FLAME requires trainable parameter names")
+        return flame(states, global_state, seed, parameter_keys)
     if method == "fltrust":
         if root_state is None:
             raise ValueError("FLTrust requires a root update")

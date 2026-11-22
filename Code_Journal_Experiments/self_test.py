@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from antiflipper_exp.manifest import build
 
-CORE_JOBS = 219
-FULL_JOBS = 294
+CORE_JOBS = 231
+FULL_JOBS = 306
 
 # Completed under the v1 manifest; the v2 manifest must keep their job ids so the
 # launcher skips them instead of re-running.
@@ -21,13 +22,17 @@ COMPLETED_V1 = {
 
 def main() -> None:
     core = build("core"); full = build("full")
+    cc_v2 = build("cc_v2")
     assert len(core) == CORE_JOBS, len(core)
     assert len(full) == FULL_JOBS, len(full)
-    for jobs in (core, full, build("smoke")):
+    assert len(cc_v2) == 12, len(cc_v2)
+    for jobs in (core, full, build("smoke"), cc_v2):
         assert len({job.job_id for job in jobs}) == len(jobs)
         for job in jobs: job.validate()
         assert max(job.malicious_client_fraction for job in jobs) <= 0.4, "threat model caps attackers at 40%"
     ids = {job.job_id for job in core}
+    assert all(replace(job, method="antiflipper_cc").job_id in ids for job in cc_v2)
+    assert [job.job_id for job in core if job.method == "antiflipper_cc_v2"] == [job.job_id for job in cc_v2]
     missing = COMPLETED_V1 - ids
     assert not missing, f"completed v1 jobs no longer in manifest: {missing}"
     on_disk = {p.parent.name for p in (Path(__file__).parent / "results" / "core").glob("*/summary.json")}

@@ -6,7 +6,7 @@ import sys
 
 from antiflipper_exp.analysis import analyze
 from antiflipper_exp.benchmark import fixed_workload_benchmark
-from antiflipper_exp.manifest import load_manifest
+from antiflipper_exp.manifest import PROFILES, load_manifest
 from antiflipper_exp.orchestrator import ANALYSIS, RESULTS, package, prepare_manifest, run_manifest, status_rows, write_checklist
 
 
@@ -15,7 +15,7 @@ def parser() -> argparse.ArgumentParser:
     sub = value.add_subparsers(dest="command", required=True)
     for name in ("plan", "status", "run", "analyze", "benchmark", "package"):
         command = sub.add_parser(name)
-        command.add_argument("--profile", choices=("smoke", "core", "full"), default="core")
+        command.add_argument("--profile", choices=PROFILES, default="core")
         if name == "plan": command.add_argument("--force", action="store_true")
         if name == "run":
             command.add_argument("--stop-on-error", action="store_true")

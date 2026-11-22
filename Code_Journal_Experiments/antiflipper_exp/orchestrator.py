@@ -113,9 +113,11 @@ def write_checklist(manifest_path: Path) -> Path:
     for row in rows:
         mark = "x" if row["status"] == "completed" else " "
         lines.append(f"| [{mark}] | {row['index']} | {row['experiment']} | {row['dataset']} | {row['distribution']} | {row['method']} | {row['seed']} | {row['status']} |")
-    path = ROOT / "CHECKLIST.md"
+    checklist_root = RESULTS / profile if profile == "cc_v2" else ROOT
+    checklist_root.mkdir(parents=True, exist_ok=True)
+    path = checklist_root / "CHECKLIST.md"
     temporary = path.with_suffix(".tmp"); temporary.write_text("\n".join(lines) + "\n", encoding="utf-8"); os.replace(temporary, path)
-    with (ROOT / "checklist.csv").open("w", newline="", encoding="utf-8") as handle:
+    with (checklist_root / "checklist.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
     return path
 
@@ -293,7 +295,9 @@ def package(manifest_path: Path) -> Path:
     manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()[:10]
     PACKAGES.mkdir(parents=True, exist_ok=True)
     destination = PACKAGES / f"AntiFlipper_Q1_{profile}_{'COMPLETE' if complete else 'PARTIAL'}_{stamp}_{manifest_hash}.zip"
-    include_roots = [manifest_path, ROOT / "CHECKLIST.md", ROOT / "checklist.csv", ANALYSIS / profile, RESULTS / profile]
+    include_roots = [manifest_path, ANALYSIS / profile, RESULTS / profile]
+    if profile != "cc_v2":
+        include_roots.extend((ROOT / "CHECKLIST.md", ROOT / "checklist.csv"))
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for source in include_roots:
             if not source.exists(): continue

@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader, Dataset, Subset
 
 from .aggregators import AggregatorState, aggregate, update_consistency
 from .attacks import PartiallyPoisonedDataset
-from .config import ANTIFLIPPER_METHODS, CONSISTENCY_METHODS, REPORT_METHODS, ExperimentConfig, LABEL_MAP
+from .config import ANTIFLIPPER_METHODS, CC_V2, CONSISTENCY_METHODS, HARD_EXCLUSION_METHODS, REPORT_METHODS, ExperimentConfig, LABEL_MAP
 
 # Methods that make an explicit per-round keep/drop decision (zero weight = flagged).
 # FedAvg, Median and Trimmed Mean never classify clients, so they get no detection metrics.
@@ -312,6 +312,33 @@ def _update_trust(
     _normalize_trust(trust, excluded)
 
 
+def _update_cc_v2(
+    cfg: ExperimentConfig,
+    reports: dict[int, float],
+    inconsistent: set[int],
+    previous_reports: dict[int, float],
+    trust: dict[int, float],
+    counters: dict[int, int],
+    round_index: int,
+) -> set[int]:
+    if round_index >= cfg.grace_rounds:
+        for client_id, score in reports.items():
+            if client_id in inconsistent:
+                # An upward jump can strengthen an update-based strike. A report
+                # alone cannot create or cancel a strike.
+                previous = previous_reports.get(client_id)
+                extra = previous is not None and score - previous > 0.05
+                counters[client_id] = min(cfg.counter_threshold, counters[client_id] + 1 + int(extra))
+            else:
+                counters[client_id] = max(0, counters[client_id] - 1)
+    previous_reports.clear()
+    previous_reports.update(reports)
+    raw_weights = {i: 0.5 ** min(strikes, 16) for i, strikes in counters.items()}
+    total = sum(raw_weights.values())
+    trust.update({i: weight / total for i, weight in raw_weights.items()})
+    return {i for i, strikes in counters.items() if strikes == cfg.counter_threshold}
+
+
 def _sync_directory(path: Path) -> None:
     if os.name == "posix":
         descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
@@ -372,12 +399,14 @@ def _checkpoint_payload(
     detection_round: dict[int, int],
     rows: list[dict[str, Any]],
     aggregator_state: AggregatorState,
+    previous_reports: dict[int, float],
 ) -> dict[str, Any]:
     return {
         "next_round": round_index + 1,
         "model": {k: v.detach().cpu() for k, v in model.state_dict().items()},
         "trust": trust, "counters": counters, "excluded": excluded,
         "detection_round": detection_round, "rows": rows,
+        **({"previous_reports": previous_reports} if previous_reports else {}),
         "aggregator_state": aggregator_state.state_dict(),
         "python_rng": random.getstate(), "numpy_rng": np.random.get_state(), "torch_rng": torch.get_rng_state(),
         "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
@@ -401,6 +430,7 @@ def run_experiment(
     device = resolve_device(cfg.device)
     data: FederatedData = build_federated_data(cfg)
     model = create_model(cfg.dataset, cfg.model).to(device)
+    parameter_keys = tuple(name for name, param in model.named_parameters() if param.requires_grad)
     attackers_count = int(cfg.malicious_client_fraction * cfg.num_clients)
     attacker_rng = np.random.default_rng(cfg.seed + 307)
     attackers = set(int(x) for x in attacker_rng.choice(cfg.num_clients, attackers_count, replace=False)) if attackers_count else set()
@@ -422,6 +452,7 @@ def run_experiment(
     counters = {i: 0 for i in range(cfg.num_clients)}
     excluded: set[int] = set()
     detection_round: dict[int, int] = {}
+    previous_reports: dict[int, float] = {}
     rows: list[dict[str, Any]] = []
     aggregator_state = AggregatorState()
     start_round = 0
@@ -430,6 +461,7 @@ def run_experiment(
         start_round = int(payload["next_round"]); model.load_state_dict(payload["model"])
         trust = payload["trust"]; counters = payload["counters"]; excluded = set(payload["excluded"])
         detection_round = payload["detection_round"]; rows = payload["rows"]
+        previous_reports = payload.get("previous_reports", {})
         aggregator_state.load_state_dict(payload["aggregator_state"])
         random.setstate(payload["python_rng"]); np.random.set_state(payload["numpy_rng"]); torch.set_rng_state(payload["torch_rng"])
         if torch.cuda.is_available() and payload.get("cuda_rng") is not None:
@@ -473,13 +505,19 @@ def run_experiment(
                 similarity_values, inconsistent = update_consistency([x.state for x in client_results], global_cpu, cfg.consistency_z)
                 similarities = {x.client_id: float(v) for x, v in zip(client_results, similarity_values)}
                 inconsistent_ids = [x.client_id for x, bad in zip(client_results, inconsistent) if bad]
-                if inconsistent_ids and cfg.method in REPORT_METHODS:
+                if inconsistent_ids and cfg.method == "antiflipper_cc":
                     # A report that disagrees with the client's own update is not believed:
                     # it is replaced with the round's worst report before the trust update.
                     floor = min(reports.values())
                     for client_id in inconsistent_ids:
                         reports[client_id] = floor
-            if cfg.method in ANTIFLIPPER_METHODS:
+            v2_flagged: set[int] = set()
+            if cfg.method == CC_V2:
+                v2_flagged = _update_cc_v2(cfg, reports, set(inconsistent_ids), previous_reports, trust, counters, round_index)
+                for client_id in v2_flagged:
+                    detection_round.setdefault(client_id, round_index)
+                admitted = client_results
+            elif cfg.method in HARD_EXCLUSION_METHODS:
                 _update_trust(cfg, reports, trust, counters, excluded, round_index, detection_round, set(inconsistent_ids))
                 admitted = [x for x in client_results if x.client_id not in excluded]
             else:
@@ -503,7 +541,7 @@ def run_experiment(
                 cfg.method, [x.state for x in admitted], global_cpu, [x.client_id for x in admitted],
                 cfg.malicious_client_fraction, aggregator_state,
                 trust_weights=[trust[x.client_id] for x in admitted] if cfg.method in ANTIFLIPPER_METHODS else None,
-                root_state=root_state, seed=cfg.seed + round_index,
+                root_state=root_state, seed=cfg.seed + round_index, parameter_keys=parameter_keys,
             )
             if device.type == "cuda": torch.cuda.synchronize()
             aggregation_seconds = time.perf_counter() - aggregation_started
@@ -511,13 +549,15 @@ def run_experiment(
             _sync(device); test_started = time.perf_counter()
             test = evaluate(model, data.test, cfg.test_batch_size, device)
             _sync(device); test_eval_seconds = time.perf_counter() - test_started
-            confusion = _confusion(excluded if cfg.method in ANTIFLIPPER_METHODS else set(), attackers, cfg.num_clients)
-            # Round-level decision for every detecting method: clients given zero weight
-            # this round, plus (for AntiFLipper) clients already excluded.
+            if cfg.method == "flame" and not np.isfinite(test["loss"]):
+                raise ValueError(f"FLAME produced non-finite test loss in round {round_index + 1}")
+            confusion = _confusion(v2_flagged if cfg.method == CC_V2 else excluded, attackers, cfg.num_clients)
+            # Selectors flag zero-weight clients. AntiFlipper variants also track
+            # cumulative exclusions or the current v2 strike threshold.
             weights_array = np.asarray(method_weights, dtype=float).reshape(-1)
             flagged = {x.client_id for x, w in zip(admitted, weights_array) if w <= 1e-12} if len(weights_array) == len(admitted) else set()
             if cfg.method in ANTIFLIPPER_METHODS:
-                flagged |= excluded
+                flagged |= excluded | v2_flagged
             round_confusion = _confusion(flagged, attackers, cfg.num_clients) if cfg.method in DETECTING_METHODS else None
             malicious_delays = [detection_round[i] for i in attackers if i in detection_round]
             row = {
@@ -560,6 +600,8 @@ def run_experiment(
             # One row per client per round, for trust/report/similarity trajectory plots.
             local_loss = {x.client_id: x.local_loss for x in client_results}
             weight_of = {x.client_id: float(w) for x, w in zip(admitted, weights_array)} if len(weights_array) == len(admitted) else {}
+            if cfg.method == CC_V2:
+                row["attacker_weight_fraction"] = sum(weight_of.get(i, 0.0) for i in attackers) / sum(weight_of.values())
             _append_client_history(history_path, [{
                 "round": round_index, "client": i, "attacker": int(i in attackers),
                 "selected": int(i in reports), "excluded": int(i in excluded),
@@ -575,7 +617,7 @@ def run_experiment(
                 "trust": trust, "counters": counters,
             }, indent=2), encoding="utf-8")
             if (round_index + 1) % cfg.checkpoint_every == 0 or round_index + 1 == cfg.rounds:
-                _atomic_torch_save(_checkpoint_payload(round_index, model, trust, counters, excluded, detection_round, rows, aggregator_state), checkpoint_path)
+                _atomic_torch_save(_checkpoint_payload(round_index, model, trust, counters, excluded, detection_round, rows, aggregator_state, previous_reports), checkpoint_path)
 
         final = rows[-1]
         last_window = rows[-min(10, len(rows)):]
@@ -635,10 +677,12 @@ def run_experiment(
             # round by which every attacker was excluded (None if never).
             "mean_detection_round": float(np.mean([detection_round[i] for i in attackers if i in detection_round])) if any(i in detection_round for i in attackers) else None,
             "full_detection_round": max(detection_round[i] for i in attackers) if attackers and all(i in detection_round for i in attackers) else None,
-            "first_honest_exclusion_round": min((r for i, r in detection_round.items() if i not in attackers), default=None),
+            "first_honest_exclusion_round": min((detection_round[i] for i in excluded - attackers), default=None),
             "total_seconds": time.perf_counter() - run_started, "attackers": sorted(attackers), "excluded": sorted(excluded),
             "detection_round": detection_round, "device": str(device), "torch_version": torch.__version__, "platform": platform.platform(),
         }
+        if cfg.method == CC_V2:
+            summary["mean_attacker_weight_fraction"] = _mean("attacker_weight_fraction")
         with _durable_write(job_dir / "summary.json", "w", encoding="utf-8") as handle:
             json.dump(summary, handle, indent=2)
         with _durable_write(state_path, "w", encoding="utf-8") as handle:

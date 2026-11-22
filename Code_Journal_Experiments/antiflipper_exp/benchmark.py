@@ -11,29 +11,41 @@ import numpy as np
 import torch
 
 from .aggregators import AggregatorState, aggregate, update_consistency
-from .config import ExperimentConfig
+from .config import ANTIFLIPPER_METHODS, CC_V2, CONSISTENCY_METHODS, ExperimentConfig
 from .models import create_model
 
 
-METHODS = ("antiflipper", "antiflipper_cc", "cc_only", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
+METHODS = ("antiflipper", "antiflipper_cc", CC_V2, "cc_only", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
 
 
-def _antiflipper_server_work(method: str, states: list[dict], base: dict, count: int, iteration: int) -> None:
+def _antiflipper_server_work(method: str, states: list[dict], base: dict, count: int, iteration: int) -> list[float]:
     """Server-side work AntiFLipper does before aggregation, so the benchmark is not
     just a weighted average: (cc) consistency check + trust update + thresholding."""
-    from .engine import _update_trust
+    from .engine import _update_cc_v2, _update_trust
 
-    if method in ("antiflipper_cc", "cc_only"):
-        update_consistency(states, base, 2.5)
+    inconsistent = set()
+    if method in CONSISTENCY_METHODS:
+        _, flags = update_consistency(states, base, 2.5)
+        inconsistent = set(np.flatnonzero(flags))
     cfg = ExperimentConfig("bench", "MNIST", "IID", method, 0, rounds=1, num_clients=count)
     rng = np.random.default_rng(iteration)
     reports = {i: float(x) for i, x in enumerate(rng.uniform(0.5, 1.0, count))}
     trust = {i: 1.0 / count for i in range(count)}
-    _update_trust(cfg, reports, trust, {i: 0 for i in range(count)}, set(), cfg.grace_rounds, {})
+    counters = dict.fromkeys(reports, 0)
+    if method == CC_V2:
+        _update_cc_v2(cfg, reports, inconsistent, reports.copy(), trust, counters, cfg.grace_rounds)
+    else:
+        if method == "antiflipper_cc" and inconsistent:
+            floor = min(reports.values())
+            for client_id in inconsistent:
+                reports[client_id] = floor
+        _update_trust(cfg, reports, trust, counters, set(), cfg.grace_rounds, {}, inconsistent)
+    return list(trust.values())
 
 
-def _states(dataset: str, count: int) -> tuple[dict, list[dict], dict]:
+def _states(dataset: str, count: int) -> tuple[dict, list[dict], dict, tuple[str, ...]]:
     model = create_model(dataset)
+    parameter_keys = tuple(name for name, param in model.named_parameters() if param.requires_grad)
     base = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     states: list[dict] = []
     generator = torch.Generator().manual_seed(991 + count)
@@ -47,7 +59,7 @@ def _states(dataset: str, count: int) -> tuple[dict, list[dict], dict]:
     root = copy.deepcopy(base)
     for key, tensor in root.items():
         if torch.is_floating_point(tensor): root[key] = tensor + torch.randn(tensor.shape, generator=generator, dtype=tensor.dtype) * 1e-5
-    return base, states, root
+    return base, states, root, parameter_keys
 
 
 def fixed_workload_benchmark(output: Path, iterations: int = 5) -> list[dict]:
@@ -57,9 +69,9 @@ def fixed_workload_benchmark(output: Path, iterations: int = 5) -> list[dict]:
     # ResNet18 is kept at its paper workload (20 clients); MNIST supplies N scaling.
     for dataset, counts in (("MNIST", (20, 50, 100)), ("CIFAR10", (20,))):
         for count in counts:
-            base, states, root = _states(dataset, count)
+            base, states, root, parameter_keys = _states(dataset, count)
             parameters = sum(v.numel() for v in base.values())
-            client_ids = list(range(count)); trust = np.ones(count) / count
+            client_ids = list(range(count))
             for method in METHODS:
                 times: list[float] = []
                 error = ""
@@ -67,9 +79,9 @@ def fixed_workload_benchmark(output: Path, iterations: int = 5) -> list[dict]:
                     runtime = AggregatorState()
                     for iteration in range(iterations + 1):
                         started = time.perf_counter()
-                        if method in ("antiflipper", "antiflipper_cc", "cc_only"):
-                            _antiflipper_server_work(method, states, base, count, iteration)
-                        aggregate(method, states, base, client_ids, 0.4, runtime, trust_weights=trust, root_state=root, seed=iteration)
+                        trust = _antiflipper_server_work(method, states, base, count, iteration) if method in ANTIFLIPPER_METHODS else None
+                        aggregate(method, states, base, client_ids, 0.4, runtime, trust_weights=trust,
+                                  root_state=root, seed=iteration, parameter_keys=parameter_keys)
                         elapsed = time.perf_counter() - started
                         if iteration: times.append(elapsed)
                 except Exception as exc:

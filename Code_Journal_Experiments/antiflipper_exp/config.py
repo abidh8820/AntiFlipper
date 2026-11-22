@@ -13,9 +13,11 @@ LABEL_MAP = {0: 1, 1: 0, 2: 3, 3: 2, 4: 5, 5: 4, 6: 7, 7: 6, 8: 9, 9: 8}
 #   antiflipper     accuracy reports only (submitted method)
 #   antiflipper_cc  accuracy reports + update-consistency cross-check (proposed)
 #   cc_only         ablation: consistency cross-check only, reports ignored, uniform weights
-ANTIFLIPPER_METHODS = {"antiflipper", "antiflipper_cc", "cc_only"}
-CONSISTENCY_METHODS = {"antiflipper_cc", "cc_only"}
-REPORT_METHODS = {"antiflipper", "antiflipper_cc"}
+CC_V2 = "antiflipper_cc_v2"
+HARD_EXCLUSION_METHODS = {"antiflipper", "antiflipper_cc", "cc_only"}
+ANTIFLIPPER_METHODS = HARD_EXCLUSION_METHODS | {CC_V2}
+CONSISTENCY_METHODS = {"antiflipper_cc", "cc_only", CC_V2}
+REPORT_METHODS = {"antiflipper", "antiflipper_cc", CC_V2}
 # Threat model: at most 40% of clients are malicious.
 MAX_MALICIOUS_FRACTION = 0.4
 KNOWN_METHODS = ANTIFLIPPER_METHODS | {"fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust"}

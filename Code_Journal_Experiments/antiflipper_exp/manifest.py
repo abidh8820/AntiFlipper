@@ -5,10 +5,11 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from .config import ExperimentConfig
+from .config import CC_V2, ExperimentConfig
 
 
 SEEDS = (7, 19, 31)
+PROFILES = ("smoke", "core", "full", "cc_v2")
 # Held out from every reported comparison; used only for hyperparameter sensitivity.
 SENSITIVITY_SEEDS = (101, 113, 127)
 
@@ -128,11 +129,33 @@ def optional_jobs() -> list[ExperimentConfig]:
     return jobs
 
 
+def cc_v2_jobs(reference: list[ExperimentConfig]) -> list[ExperimentConfig]:
+    matched = {
+        (job.experiment, job.seed): job for job in reference
+        if job.method == "antiflipper_cc" and job.dataset == "CIFAR10" and job.distribution == "NON_IID"
+        and (job.experiment != "A2_clean_heterogeneity" or job.dirichlet_alpha == 0.1)
+    }
+    # Pair the two key comparisons by seed so both have early results.
+    return [
+        replace(matched[experiment, seed], method=CC_V2)
+        for experiments in (("A2_clean_heterogeneity", "A7_adaptive_report"), ("A1_headline", "A2_attacked_heterogeneity"))
+        for seed in SEEDS
+        for experiment in experiments
+    ]
+
+
 def build(profile: str) -> list[ExperimentConfig]:
-    if profile == "smoke": return smoke_jobs()
-    if profile == "core": return core_jobs()
-    if profile == "full": return _dedupe(core_jobs() + optional_jobs())
-    raise ValueError(f"Unknown profile: {profile}")
+    if profile == "smoke":
+        return smoke_jobs()
+    if profile not in PROFILES:
+        raise ValueError(f"Unknown profile: {profile}")
+    reference = core_jobs()
+    cc_v2 = cc_v2_jobs(reference)
+    if profile == "cc_v2":
+        return cc_v2
+    first_sweep = next(i for i, job in enumerate(reference) if job.experiment == "A2_clean_heterogeneity")
+    core = reference[:first_sweep] + cc_v2 + reference[first_sweep:]
+    return core if profile == "core" else _dedupe(core + optional_jobs())
 
 
 def save_manifest(path: Path, profile: str, jobs: list[ExperimentConfig]) -> None:
