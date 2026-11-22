@@ -197,3 +197,8 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - Clean α0.5: CR 68.5 FPR 0; CR+CC 69.3 FPR .15 (old AntiFLipper 34.6, CC 66.5).
 - Clean α0.1 seed 19: CR 61.9, CR+CC 53.1, both FPR 0 (old AntiFLipper 22.8).
 - Decision: the paper's proposed method = AntiFLipper-CR+CC (CR fixes heterogeneity FPs; CC needed against report faking). Watch the CR+CC vs CR accuracy gap at clean α0.1 across seeds.
+
+## 2026-11-22 21:45 (24/84 done, seed 19 under way)
+- Seed 19 attacked α0.1: CR and CR+CC 59.0%, 8/8 caught, 0 honest excluded. Beats FedAvg s19 51.7, LFighter 50.2, cc_v2 49.4, old AntiFLipper 13.3. So the "only level with FedAvg" result was seed 7 only.
+- Seed 19 headline: CR 71.4, CR+CC 72.0, both recall 1 FPR 0; CC z3 70.6 FPR .17.
+- Service healthy, 0 restarts, ~27h left (cr), then fltrust_fix.
