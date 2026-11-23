@@ -245,3 +245,7 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - ETA: ~midday Nov 24 for fltrust_fix and evening Nov 24 for cr if the CPU load continues; ~8 h less if it stops.
 - 21:08: the CPU job is about half done; expected end ~00:30-01:00 Nov 24. Revised ETA: fltrust_fix ~05:30, cr ~09:00 Nov 24 (if nothing else starts).
 - Scheduling check on NDAG PC: nothing else scheduled that can start new work; the other workloads were started by hand.
+
+## 2026-11-23 ~21:30 (decision pending)
+- User asked whether to stop the other lab user's CPU job. Advised against it without the owner's consent: it is expected to end ~00:30-01:00 anyway, would only save ~2-3 h, and results are unaffected. Options: wait, ask the owner, or renice with their OK.
+- Decision deferred to ~01:00 Nov 24: check whether the CPU job has ended; if not, the user decides.
