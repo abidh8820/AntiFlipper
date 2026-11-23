@@ -202,3 +202,12 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - Seed 19 attacked α0.1: CR and CR+CC 59.0%, 8/8 caught, 0 honest excluded. Beats FedAvg s19 51.7, LFighter 50.2, cc_v2 49.4, old AntiFLipper 13.3. So the "only level with FedAvg" result was seed 7 only.
 - Seed 19 headline: CR 71.4, CR+CC 72.0, both recall 1 FPR 0; CC z3 70.6 FPR .17.
 - Service healthy, 0 restarts, ~27h left (cr), then fltrust_fix.
+
+## 2026-11-23 08:38 (49/84 done; key block complete for all 3 seeds)
+3-seed last-10 means (core baselines in brackets):
+- Headline: CR+CC 72.0 (recall 1, FPR 0 every seed); CR 70.6; CC z3 70.9 (FPR .14). [AntiFLipper 71.0 FPR .08, FLTrust 69.2, FedAvg 44.2]
+- Attacked α0.1: CR 49.1, CR+CC 49.1 (recall .96, FPR 0). [FedAvg 43.8, cc_v2 43.6, LFighter 41.6, FLTrust 39.3, AntiFLipper 13.0, budget-only 12.5]
+- Clean α0.1: CR 60.2 (FPR .02), CR+CC 54.2 (FPR 0). [cc_v2 60.4, cc_only 57.5, AntiFLipper 16.3, CC z3 21.3]
+- Clean α0.5: CR 64.8, CR+CC 66.5. [AntiFLipper 40.7, CC 59.7, cc_only 65.5]; clean α1: CR 75.5, CR+CC 75.4.
+- Adaptive faking: CR+CC recall 1 all seeds, FPR 0, 71.9; CR alone recall .63.
+- Remaining: ratio 10/20/30%, CIFAR IID, MNIST coverage (~19h), then fltrust_fix.
