@@ -260,3 +260,8 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - contention.py now covers cr + fltrust_fix (anchor: journal COMPLETED, else round_metrics.csv mtime for running jobs) and reports per method. The CPU workload window was closed at its end, 00:33 Nov 24 (local busy_windows.txt).
 - Server defense per round (median), free-machine rounds: CR 36 ms, CR+CC 36 ms, AntiFLipper 25 ms, FLTrust 403 ms (+178 ms root training; n=67 free rounds so far). Shared-machine FLTrust: 2.95 s (7x inflated by CPU contention); CR barely affected (32-35 ms). Core-run FLTrust 352-399 ms agrees with the free-round value.
 - Paper: FLTrust timing = free rounds of the bn-safe re-runs (the 12 jobs from 00:09 on are all free) cross-checked with core; plus the matched-N aggregation benchmark on an idle GPU as the controlled comparison. FLTrust ≈ 11x the server cost of CR.
+
+## 2026-11-24 01:57 (automatic result pulls)
+- Results_Backup_2026-11-23/pull_results.sh copies results/cr + fltrust_fix (no checkpoints) from the NDAG PC via temp dir (a failed pull keeps the old copy), refreshes service_events.log, logs to pull_results.log.
+- Windows Task Scheduler task "AntiFlipper pull results": 06:30, 11:30, 13:30 Nov 24 (StartWhenAvailable, so a missed run happens on wake). Tested: OK. Pulled now: cr 68/84, fltrust_fix 9/18.
+- Remove later with: Unregister-ScheduledTask -TaskName 'AntiFlipper pull results' -Confirm:$false
