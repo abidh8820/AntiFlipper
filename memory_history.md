@@ -249,3 +249,9 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 ## 2026-11-23 ~21:30 (decision pending)
 - User asked whether to stop the other lab user's CPU job. Advised against it without the owner's consent: it is expected to end ~00:30-01:00 anyway, would only save ~2-3 h, and results are unaffected. Options: wait, ask the owner, or renice with their OK.
 - Decision deferred to ~01:00 Nov 24: check whether the CPU job has ended; if not, the user decides.
+
+## 2026-11-24 00:48 status + FLTrust finding
+- The other CPU workload has ended (load avg 3); FLTrust rounds are back to ~50 s. The 01:00 decision is moot.
+- fltrust_fix 6/18 done, 3 at ~40%; ETA ~05:50. Then the 16 cr jobs: all done ~09:00-10:00 Nov 24.
+- **The BN-safe FLTrust is worse, not better**: headline last-10 57.7 (s7 57.9, s19 56.5, s31 58.8) vs core 69.2. No NaN rounds any more (core had 1-3), but single-round collapses to 5-12% accuracy, then recovery. Attacker weight share is the same as core (20-30%), so detection did not change. Likely cause: parameters move by the root-norm-scaled update while BN buffers jump to the clients' fully trained statistics -> parameter/statistics mismatch. Attacked α0.1 bn-safe: 29.9/37.1/46.4 (core 32.1/41.2/44.7).
+- Decision (recommended): the paper uses the core FLTrust as the main baseline (the stronger version: the fairer comparison, and still below CR+CC 72.0), notes its 1-3 NaN rounds, and reports the BN-safe variant in a footnote. Let fltrust_fix finish as is (the total finish time does not change). Possible alternative later: rescale BN deltas like the parameters and clamp running_var > 0, or take BN statistics from the root model.
