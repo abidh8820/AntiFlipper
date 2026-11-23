@@ -2,3 +2,4 @@
 # local-only: large result backups and credentials
 Results_Backup_*/
 ssh.txt
+memory_history.local.md

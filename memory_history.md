@@ -217,3 +217,31 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
   Core baselines: AntiFLipper 73.2/72.4/69.2 (FPR .09-.17), FLTrust 71.8/71.8/70.8 (FPR .31-.43), LFighter 72.4/71.4/64.9, FedAvg 74.3/73.5/61.0.
 - CR/CR+CC are the most accurate defense at every ratio, and at 10-20% match FedAvg (no cost of defending).
 - Remaining: CR+CC 30% seeds, CIFAR IID, MNIST coverage; then fltrust_fix.
+
+## 2026-11-23 18:04 (GPU contention)
+- 17:31: another user's GPU workload on the NDAG PC took ~21 GB of the RTX 3090 -> CUDA OOM. The orchestrator stopped cr safely (checkpoints kept), the queue moved on to fltrust_fix, which also hit OOM; the service exited 1 and systemd restarted it (NRestarts=1). cr hit OOM again, so fltrust_fix is running now.
+- State: cr 68/84 (16 left: CIFAR IID CR+CC, MNIST), fltrust_fix 3 running (~18%). Rounds ~115 s instead of ~50 s because the GPU is shared.
+- Self-healing: fltrust_fix finishes -> queue exits 1 (cr failed) -> systemd restarts after 60 s -> cr resumes, completed jobs skipped. No action needed unless OOM repeats.
+- ETA: ~1-1.5 days if the other job keeps running, ~15 h if it stops.
+
+## 2026-11-23 18:15 (other GPU job)
+- The other GPU workload (another lab user's, running since 07:49) caused the 17:31 OOM; expected end ~20:30 Nov 23. Not touched. Details in local-only memory_history.local.md.
+- Impact: accuracy/detection unaffected (seeded, RNG restored on resume). Timing is inflated for jobs run during contention (fltrust_fix, last cr jobs). Take paper timing claims from core + the timing benchmark; flag overlapping jobs, re-run the timing benchmark on an idle GPU if needed.
+- ETA: fltrust_fix ~04:00-05:00 Nov 24, remaining 16 cr jobs ~11:00-13:00 Nov 24.
+
+## 2026-11-23 (results snapshot copied + analyzed)
+- Copied results/cr (74 dirs, 68 complete) and results/fltrust_fix (partial) from the GPU, without checkpoints, into Results_Backup_2026-11-23/ (gitignored). Tables: Results_Backup_2026-11-23/ANALYSIS_tables.md (script analyze.py next to it).
+- New observations beyond earlier entries: CIFAR IID CR 73.6 (2 seeds) ≈ AntiFLipper 73.3; CR detection is slow under α0.1 attack (full detection ~round 70 vs ~15 at α1); CR defense cost ~30-40 ms/round vs 23 ms for plain AntiFLipper (still ≪ FLTrust ~360 ms, Multi-Krum ~900, FLAME ~1000).
+
+## 2026-11-23 (timing: keep only GPU-free rounds)
+- User: sample timing only from rounds when the GPU was free. Built Results_Backup_2026-11-23/contention.py: reconstructs each round's wall-clock end from journal COMPLETED timestamps (service_events.log) minus cumulative round_seconds, tags rounds inside the other job's window (07:49 Nov 23 .. the other workload's end) as gpu_shared -> round_timing_tagged.csv.
+- CR CIFAR medians, free vs shared: client train 2.27 vs 2.74 s (+20%), test eval 1.12 vs 1.97 s, server defense 0.035 vs 0.034 s (CPU, unaffected). Core run client train median 2.18 s (consistent with free).
+- Plan: paper timing tables use GPU-free rounds only; FLTrust re-runs are fully inside the shared window, so FLTrust timing comes from core (accuracy from the bn-safe re-runs). Re-run contention.py after the queue ends (add fltrust_fix + the resumed jobs; resumed jobs need anchoring at their Resuming timestamp).
+
+## 2026-11-23 21:03 status
+- The other GPU workload ended 19:31. New load since 17:45: another lab user's CPU-heavy job (load avg 67-92 on 24 cores). FLTrust rounds still ~100-130 s (vs ~49 s free); GPU only 58% busy -> CPU-bound.
+- fltrust_fix 3/18 done (A1 headline, 3 seeds), A2 attacked jobs running. cr 68/84 (resumes after fltrust_fix).
+- Timing filter generalized: Results_Backup_2026-11-23/busy_windows.txt (local) lists GPU and CPU workload windows; contention.py tags rounds in any window. Server defense timing is CPU-side, so CPU contention can affect it -> the CPU window is also excluded.
+- ETA: ~midday Nov 24 for fltrust_fix and evening Nov 24 for cr if the CPU load continues; ~8 h less if it stops.
+- 21:08: the CPU job is about half done; expected end ~00:30-01:00 Nov 24. Revised ETA: fltrust_fix ~05:30, cr ~09:00 Nov 24 (if nothing else starts).
+- Scheduling check on NDAG PC: nothing else scheduled that can start new work; the other workloads were started by hand.
