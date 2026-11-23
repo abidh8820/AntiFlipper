@@ -211,3 +211,9 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - Clean α0.5: CR 64.8, CR+CC 66.5. [AntiFLipper 40.7, CC 59.7, cc_only 65.5]; clean α1: CR 75.5, CR+CC 75.4.
 - Adaptive faking: CR+CC recall 1 all seeds, FPR 0, 71.9; CR alone recall .63.
 - Remaining: ratio 10/20/30%, CIFAR IID, MNIST coverage (~19h), then fltrust_fix.
+
+## 2026-11-23 16:07 (64/84 done, ~13h left in cr)
+- Ratio sweep (3-seed last-10): CR 74.3/73.5/72.8 at 10/20/30%, recall 1, FPR ≤.02. CR+CC 74.1/73.3 (30%: 1 seed so far, 72.1), recall 1, FPR ~.04-.05.
+  Core baselines: AntiFLipper 73.2/72.4/69.2 (FPR .09-.17), FLTrust 71.8/71.8/70.8 (FPR .31-.43), LFighter 72.4/71.4/64.9, FedAvg 74.3/73.5/61.0.
+- CR/CR+CC are the most accurate defense at every ratio, and at 10-20% match FedAvg (no cost of defending).
+- Remaining: CR+CC 30% seeds, CIFAR IID, MNIST coverage; then fltrust_fix.
