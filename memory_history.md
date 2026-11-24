@@ -273,3 +273,8 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - Timing (GPU/CPU-free rounds, median server defense): CR 36 ms, CR+CC 36 ms, FLTrust 415 ms + 174 ms root training (n=1136 free rounds); MNIST CR 3-4 ms.
 - NDAG PC: NVIDIA driver/library mismatch (driver updated overnight) -> needs a reboot before new GPU work.
 - Next: update Paper/v9/make_results.py for CR rows + FLTrust choice + free-round timing, then rewrite the paper around AntiFLipper-CR+CC.
+
+## 2026-11-24 10:15 (verification + full NDAG copy)
+- Local results verified against NDAG by md5: cr + fltrust_fix 822/822 files present; only 3 environment files differ (rewritten when the service re-ran at boot). Core: 693/693 result files identical to Results_Backup_2026-11-22.
+- NDAG PC rebooted ~09:48 (driver mismatch fixed: driver 580.196.07, GPU idle). On boot antiflipper-cr started, skipped all jobs, re-ran analysis/packaging, exited (inactive). Nothing of ours running. The service is still enabled and will repeat this no-op on every boot.
+- Full NDAG copy: Results_Backup_2026-11-24_NDAG/ (gitignored): repo/ = whole AntiFlipper tree minus datasets (data/, 242 MB) and .pt checkpoints (396 MB: results incl. core/cr/fltrust_fix/failed_attempts, analysis, packages zips, manifests, Paper, notes); ndag_all_branches.bundle (verified); ndag_git_status.txt. NDAG-only branches fetched locally as ndag/gpu-local-backup-2026-11-22 and ndag/publish-aashnan-completed-20261120 (not pushed).
