@@ -1,0 +1,40 @@
+% AntiFLipper architecture (one round). Included by AntiFlipper_v10.tex.
+\begin{tikzpicture}[
+  font=\footnotesize, >={Stealth[length=4pt]},
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, minimum height=11mm, line width=0.5pt},
+  rep/.style={box, fill=blue!7},
+  upd/.style={box, fill=orange!12},
+  ctl/.style={box, fill=gray!12},
+  lab/.style={font=\scriptsize, inner sep=1.5pt},
+  flow/.style={->, line width=0.6pt},
+]
+% ---- clients
+\node[rep, text width=3.0cm] (eval)  at (0, 0.95) {\textbf{M1} Evaluate $M_t$ on $D_j$\\[1pt] report $a_j,\ \mathbf{c}_j,\ \mathbf{n}_j$};
+\node[upd, text width=3.0cm] (train) at (0,-0.95) {Local training on $D_j$\\[1pt] ($E$ epochs) $\rightarrow m_j$};
+\begin{scope}[on background layer]
+\node[draw=black!55, dashed, rounded corners=3pt, fit=(eval)(train), inner sep=5pt,
+      label={[font=\footnotesize]above:\textbf{Client $j$} (data stays local)}] (clients) {};
+\end{scope}
+
+% ---- server
+\node[rep, text width=3.6cm] (cr)    at (5.0, 0.95) {\textbf{M2} Class-conditional residual\\[1pt] $r_j = a_j - \sum_k \pi_{jk}\hat A_k$};
+\node[upd, text width=3.6cm] (cc)    at (5.0,-0.95) {\textbf{M4} Consistency check\\[1pt] $s_j=\cos(\delta_j,\tilde\delta)$, $\tilde\delta$: median};
+\node[rep, text width=2.6cm] (trust) at (9.6, 0.95) {\textbf{M3} Trust update\\[1pt] $\tau_j \mathrel{\pm}= \eta\,(r_j-\bar r)^2$};
+\node[ctl, text width=2.6cm] (flag)  at (9.6,-0.95) {\textbf{M5} Flags and\\[1pt] capped exclusion};
+\node[ctl, text width=2.4cm, minimum height=15mm] (agg) at (13.6, 0) {\textbf{M6} Aggregate\\[2pt] $M_{t+1}=$\\ $\sum_{j\notin\beta}\tau_j\, m_j$};
+\begin{scope}[on background layer]
+\node[draw=black!55, dashed, rounded corners=3pt, fit=(cr)(cc)(trust)(flag)(agg), inner sep=5pt,
+      label={[font=\footnotesize]above:\textbf{Server} (no reference data)}] (server) {};
+\end{scope}
+
+% ---- flows
+\draw[flow] (eval)  -- node[lab, above] {84\,B report} (cr);
+\draw[flow] (train) -- node[lab, above] {update $m_j$} (cc);
+\draw[flow] (cr)    -- node[lab, above] {residual $r_j$} (trust);
+\draw[flow] (cc.north east) -- node[lab, sloped, below, pos=0.55] {override $r_j$} (trust.south west);
+\draw[flow] (cc)    -- node[lab, below] {outlier flag} (flag);
+\draw[flow] (trust) -- node[lab, right] {$n_t\tau_j<\rho$} (flag);
+\draw[flow] (trust.east) -- node[lab, above, pos=0.4] {$\tau$} (agg.north west);
+\draw[flow] (flag.east)  -- node[lab, below, pos=0.4] {$\beta$} (agg.south west);
+\draw[flow] (agg.south) -- ++(0,-1.35) -| node[lab, pos=0.25, below] {broadcast $M_{t+1}$ to active clients} (clients.south);
+\end{tikzpicture}

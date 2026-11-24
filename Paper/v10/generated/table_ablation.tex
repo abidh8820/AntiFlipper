@@ -1,0 +1,23 @@
+\begin{table*}[t]
+\centering
+\caption{Ablation on CIFAR-10. Each component is added to or removed from AntiFLipper.}
+\label{tab:ablation}
+\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}l ccc cc cc cc cc@{}}
+\toprule
+& & & & \multicolumn{2}{c}{\textbf{40\% attack}} & \multicolumn{2}{c}{\textbf{40\% report-faking}} & \multicolumn{2}{c}{\textbf{No attack}} & \multicolumn{2}{c}{\textbf{40\% attack}} \\
+& & & & \multicolumn{2}{c}{$\alpha_D{=}1$} & \multicolumn{2}{c}{$\alpha_D{=}1$} & \multicolumn{2}{c}{$\alpha_D{=}0.1$} & \multicolumn{2}{c}{$\alpha_D{=}0.1$} \\
+\cmidrule(lr){5-6}\cmidrule(lr){7-8}\cmidrule(lr){9-10}\cmidrule(lr){11-12}
+\textbf{Variant} & CR & CC & Cap & Acc. & FPR & Acc. & Rec. & Acc. & Excl.\,$\downarrow$ & Acc. & Rec. \\
+\midrule
+Raw reports & \ding{55} & \ding{55} & \ding{55} & 71.0 & 0.08 & 72.4 & 0.67 & 16.3 & 18.3 & 13.0 & 0.88 \\
+Raw reports + cap & \ding{55} & \ding{55} & \ding{51} & -- & -- & -- & -- & 16.8 & 8.0 & 12.5 & 0.38 \\
+Raw reports + CC & \ding{55} & \ding{51} & \ding{55} & 70.4 & 0.25 & 71.6 & 0.88 & 31.2 & 17.0 & 28.9 & \textbf{0.96} \\
+CC only & -- & \ding{51} & \ding{55} & 71.4 & 0.11 & 71.4 & \textbf{1.00} & 57.6 & 1.0 & 43.2 & 0.04 \\
+CR + cap (no CC) & \ding{51} & \ding{55} & \ding{51} & 70.7 & \textbf{0.00} & \textbf{73.5} & 0.62 & \textbf{60.2} & 0.3 & \textbf{49.1} & \textbf{0.96} \\
+\midrule
+\textbf{AntiFLipper} & \ding{51} & \ding{51} & \ding{51} & \textbf{72.0} & \textbf{0.00} & 72.0 & \textbf{1.00} & 54.3 & \textbf{0.0} & \textbf{49.1} & \textbf{0.96} \\
+\bottomrule
+\end{tabular}
+\end{table*}

@@ -1,21 +1,23 @@
 \begin{table}[t]
 \centering
-\caption{One-factor sensitivity of the shared trust/counter/consistency pipeline (v1 + CC, MNIST non-IID, held-out seeds 101, 113, 127). Attack: 40\% flippers. Clean: no attackers, so every exclusion is a false positive.}
+\caption{Sensitivity to $\rho$, $c_{\max}$ and $z$ (MNIST, non-IID).}
 \label{tab:sensitivity}
-\renewcommand{\arraystretch}{1.1}
 \footnotesize
-\begin{tabular}{l|cc|c}
-\hline
-& \multicolumn{2}{c|}{\textbf{Attack}} & \textbf{Clean} \\
-\textbf{Setting} & Acc. (\%) & R & FPR \\
-\hline
-default ($\rho{=}0.05$, $c_{\max}{=}6$, $z{=}2.5$) & 98.6$\pm$0.2 & 1.00 & 0.130 \\
-$\rho=0.025$ & 98.6$\pm$0.2 & 1.00 & 0.127 \\
-$\rho=0.1$ & 98.6$\pm$0.2 & 1.00 & 0.130 \\
-$c_{\max}=3$ & 98.5$\pm$0.2 & 1.00 & 0.323 \\
-$c_{\max}=9$ & 98.6$\pm$0.2 & 1.00 & 0.090 \\
-$z=2.0$ & 98.5$\pm$0.2 & 1.00 & 0.470 \\
-$z=3.0$ & 98.6$\pm$0.2 & 1.00 & 0.050 \\
-\hline
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}l ccc@{}}
+\toprule
+& \multicolumn{2}{c}{\textbf{40\% attack}} & \textbf{No attack} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-4}
+\textbf{Setting} & Acc.\,(\%) & Rec. & FPR \\
+\midrule
+Default ($\rho{=}0.05$, $c_{\max}{=}6$, $z{=}2.5$) & 98.6 & 1.00 & 0.13 \\
+\midrule
+$\rho=0.025$ & 98.6 & 1.00 & 0.13 \\
+$\rho=0.1$ & 98.6 & 1.00 & 0.13 \\
+$c_{\max}=3$ & 98.5 & 1.00 & 0.32 \\
+$c_{\max}=9$ & 98.6 & 1.00 & 0.09 \\
+$z=2.0$ & 98.5 & 1.00 & 0.47 \\
+$z=3.0$ & 98.6 & 1.00 & \textbf{0.05} \\
+\bottomrule
 \end{tabular}
 \end{table}
