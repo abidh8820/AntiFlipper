@@ -265,3 +265,11 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - Results_Backup_2026-11-23/pull_results.sh copies results/cr + fltrust_fix (no checkpoints) from the NDAG PC via temp dir (a failed pull keeps the old copy), refreshes service_events.log, logs to pull_results.log.
 - Windows Task Scheduler task "AntiFlipper pull results": 06:30, 11:30, 13:30 Nov 24 (StartWhenAvailable, so a missed run happens on wake). Tested: OK. Pulled now: cr 68/84, fltrust_fix 9/18.
 - Remove later with: Unregister-ScheduledTask -TaskName 'AntiFlipper pull results' -Confirm:$false
+
+## 2026-11-24 09:36 — ALL RUNS COMPLETE
+- cr 84/84 and fltrust_fix 18/18 done; service inactive (Result=success). Final pull OK -> Results_Backup_2026-11-23/ (ANALYSIS_tables.md regenerated).
+- Coverage: CIFAR IID CR+CC 73.3, CR 73.5 (AntiFLipper 73.3, LFighter 73.2), FPR 0. MNIST IID/non-IID CR & CR+CC 98.7, recall 1, FPR 0 (CC 8/20 honest excl. on non-IID).
+- FLTrust old vs bn-safe (3-seed): headline 69.2 vs 57.8; IID 63.1 vs 63.9; α0.1 attacked 39.3 vs 37.8; ratio 10/20/30% 71.8/71.8/70.8 vs 69.7/68.1/63.0. bn-safe: 0 NaN but lower in 5/6 -> paper uses original FLTrust as main baseline, bn-safe in footnote.
+- Timing (GPU/CPU-free rounds, median server defense): CR 36 ms, CR+CC 36 ms, FLTrust 415 ms + 174 ms root training (n=1136 free rounds); MNIST CR 3-4 ms.
+- NDAG PC: NVIDIA driver/library mismatch (driver updated overnight) -> needs a reboot before new GPU work.
+- Next: update Paper/v9/make_results.py for CR rows + FLTrust choice + free-round timing, then rewrite the paper around AntiFLipper-CR+CC.
