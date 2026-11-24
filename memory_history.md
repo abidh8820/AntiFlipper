@@ -293,3 +293,9 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - Revised the paper: narrowed abstract/intro/conclusion (the reviewer's lead claim), fixed theory (assumptions, w_k bias, no cosine guarantee, no convergence claim), both FLTrust implementations + NaN counts (6 rounds/3 runs), last-10 ASR, final-round accuracy + std in ablation, "All found k/3" in Table III, table notes moved below tabulars, matched timing column.
 - Added antiflipper_cr/_cr_cc to benchmark.py; ran the matched benchmark locally (CPU, 20 updates): AntiFLipper 173 ms, FedAvg 183, LFighter 214, FLTrust 1269, FLAME 3465, Multi-Krum 4109 -> Results_Backup_2026-11-23/timing_matched/.
 - Prepared but NOT launched: `rev` profile (69 jobs: P1 faking+strong skew, matched CC-only z3+cap, clean FedAvg α 0.1/0.5/1; P2 partial flips 0.5/0.25; P3 full-method sensitivity on MNIST) + antiflipper-rev.service. Needs the user's go-ahead (shared GPU PC) and a code sync via bundle.
+
+## 2026-11-24 11:31 (rev profile launched)
+- User: "schedule it". Synced code to the NDAG PC via bundle (GPU now at 596cd7e). Installed antiflipper-rev.service (enabled, linger) running `run_queue.sh rev`; disabled antiflipper-cr.service (finished; avoided its no-op re-run at every boot). Started 11:31; first jobs = A8 faking + strong skew, seed 7. GPU was idle; someone was at the desktop.
+- ETA ~25 GPU h at full speed: P1 ~23:30 Nov 24, P2 ~05:00, P3 ~12:30 Nov 25 (monitor's 1d22h is pessimistic, it uses CIFAR timings for MNIST).
+- pull_results.sh now also copies results/rev and the antiflipper-rev journal (service_events_rev.log). Task Scheduler pulls: Nov 24 18:00; Nov 25 00:30, 07:00, 13:30, 20:00.
+- Monitor: ssh -t ndag@100.75.182.25 "cd ~/Desktop/AAR/AntiFlipper/Code_Journal_Experiments && ./monitor.sh" ; logs: journalctl --user -u antiflipper-rev -f ; stop: systemctl --user stop antiflipper-rev
