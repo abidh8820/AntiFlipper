@@ -1,40 +1,54 @@
 % AntiFLipper architecture (one round). Included by AntiFlipper_v10.tex.
+% Needs: \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,shadows}
+\definecolor{repfill}{RGB}{232,240,252}\definecolor{repline}{RGB}{52,101,164}
+\definecolor{updfill}{RGB}{253,239,224}\definecolor{updline}{RGB}{196,110,20}
+\definecolor{ctlfill}{RGB}{238,238,238}\definecolor{ctlline}{RGB}{90,90,90}
 \begin{tikzpicture}[
-  font=\footnotesize, >={Stealth[length=4pt]},
-  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, minimum height=11mm, line width=0.5pt},
-  rep/.style={box, fill=blue!7},
-  upd/.style={box, fill=orange!12},
-  ctl/.style={box, fill=gray!12},
-  lab/.style={font=\scriptsize, inner sep=1.5pt},
-  flow/.style={->, line width=0.6pt},
+  font=\footnotesize, >={Stealth[length=4.2pt,width=3.4pt]},
+  card/.style={draw=black!45, rounded corners=4pt, fill=white, line width=0.5pt},
+  stage/.style={rounded corners=3pt, align=center, inner sep=3.5pt, minimum height=10mm, line width=0.7pt,
+               drop shadow={shadow xshift=0.6pt, shadow yshift=-0.6pt, opacity=0.25}},
+  rep/.style={stage, draw=repline, fill=repfill},
+  upd/.style={stage, draw=updline, fill=updfill},
+  ctl/.style={stage, draw=ctlline, fill=ctlfill},
+  lane/.style={font=\scriptsize\itshape, text=black!60},
+  lab/.style={font=\scriptsize, inner sep=1.2pt},
+  repflow/.style={->, line width=0.9pt, draw=repline},
+  updflow/.style={->, line width=0.9pt, draw=updline},
+  ctlflow/.style={->, line width=0.9pt, draw=ctlline},
 ]
-% ---- clients
-\node[rep, text width=3.0cm] (eval)  at (0, 0.95) {\textbf{M1} Evaluate $M_t$ on $D_j$\\[1pt] report $a_j,\ \mathbf{c}_j,\ \mathbf{n}_j$};
-\node[upd, text width=3.0cm] (train) at (0,-0.95) {Local training on $D_j$\\[1pt] ($E$ epochs) $\rightarrow m_j$};
-\begin{scope}[on background layer]
-\node[draw=black!55, dashed, rounded corners=3pt, fit=(eval)(train), inner sep=5pt,
-      label={[font=\footnotesize]above:\textbf{Client $j$} (data stays local)}] (clients) {};
-\end{scope}
+% ------------------------------------------------------------------ clients (stacked cards)
+\node[card, minimum width=4.05cm, minimum height=3.55cm] (c3) at (0.16,-0.16) {};
+\node[card, minimum width=4.05cm, minimum height=3.55cm] (c2) at (0.08,-0.08) {};
+\node[card, minimum width=4.05cm, minimum height=3.55cm] (c1) at (0,0) {};
+\node[font=\footnotesize\bfseries, anchor=north west] at ($(c1.north west)+(0.12,-0.08)$) {Client $j$};
+\node[cylinder, shape border rotate=90, aspect=0.25, draw=black!55, fill=black!6, minimum width=0.62cm,
+      minimum height=0.8cm, font=\scriptsize] (data) at (-1.35,-0.15) {$D_j$};
+\node[rep, text width=2.05cm] (eval)  at (0.6, 0.72) {\textbf{M1} Evaluate $M_t$\\[1pt] per-class counts};
+\node[upd, text width=2.05cm] (train) at (0.6,-0.95) {Local training\\[1pt] $E$ epochs};
+\draw[->, line width=0.6pt, black!55] (data.north) |- (eval.west);
+\draw[->, line width=0.6pt, black!55] (data.south) |- (train.west);
 
-% ---- server
-\node[rep, text width=3.6cm] (cr)    at (5.0, 0.95) {\textbf{M2} Class-conditional residual\\[1pt] $r_j = a_j - \sum_k \pi_{jk}\hat A_k$};
-\node[upd, text width=3.6cm] (cc)    at (5.0,-0.95) {\textbf{M4} Consistency check\\[1pt] $s_j=\cos(\delta_j,\tilde\delta)$, $\tilde\delta$: median};
-\node[rep, text width=2.6cm] (trust) at (9.6, 0.95) {\textbf{M3} Trust update\\[1pt] $\tau_j \mathrel{\pm}= \eta\,(r_j-\bar r)^2$};
-\node[ctl, text width=2.6cm] (flag)  at (9.6,-0.95) {\textbf{M5} Flags and\\[1pt] capped exclusion};
-\node[ctl, text width=2.4cm, minimum height=15mm] (agg) at (13.6, 0) {\textbf{M6} Aggregate\\[2pt] $M_{t+1}=$\\ $\sum_{j\notin\beta}\tau_j\, m_j$};
+% ------------------------------------------------------------------ server
+\node[rep, text width=2.75cm] (cr)    at (5.15, 0.72) {\textbf{M2} Class-conditional\\ residual\\[2pt] $r_j=a_j-\textstyle\sum_k\pi_{jk}\hat A_k$};
+\node[upd, text width=2.75cm] (cc)    at (5.15,-0.95) {\textbf{M4} Consistency check\\[2pt] $\cos(\delta_j,\,\mathrm{median}_i\,\delta_i)$};
+\node[rep, text width=2.15cm] (trust) at (8.6, 0.72) {\textbf{M3} Trust update\\[2pt] $\tau_j \mathrel{\pm}= \eta\,(r_j-\bar r)^2$};
+\node[ctl, text width=2.15cm] (flag)  at (8.6,-0.95) {\textbf{M5} Flags \&\\[1pt] capped exclusion};
+\node[ctl, text width=2.0cm, minimum height=2.7cm] (agg) at (11.75,-0.115) {\textbf{M6}\\ Weighted\\ aggregation\\[4pt] $\displaystyle\sum_{j\notin\beta}\tau_j m_j$};
 \begin{scope}[on background layer]
-\node[draw=black!55, dashed, rounded corners=3pt, fit=(cr)(cc)(trust)(flag)(agg), inner sep=5pt,
-      label={[font=\footnotesize]above:\textbf{Server} (no reference data)}] (server) {};
+\node[card, fill=black!2, fit=(cr)(cc)(trust)(flag)(agg), inner xsep=8pt, inner ysep=9pt, yshift=3pt, minimum height=3.85cm] (server) {};
 \end{scope}
+\node[font=\footnotesize\bfseries, anchor=north west] at ($(server.north west)+(0.12,-0.04)$) {Server};
+\node[font=\scriptsize, text=black!55, anchor=north east] at ($(server.north east)+(-0.12,-0.06)$) {no reference data};
 
-% ---- flows
-\draw[flow] (eval)  -- node[lab, above] {84\,B report} (cr);
-\draw[flow] (train) -- node[lab, above] {update $m_j$} (cc);
-\draw[flow] (cr)    -- node[lab, above] {residual $r_j$} (trust);
-\draw[flow] (cc.north east) -- node[lab, sloped, below, pos=0.55] {override $r_j$} (trust.south west);
-\draw[flow] (cc)    -- node[lab, below] {outlier flag} (flag);
-\draw[flow] (trust) -- node[lab, right] {$n_t\tau_j<\rho$} (flag);
-\draw[flow] (trust.east) -- node[lab, above, pos=0.4] {$\tau$} (agg.north west);
-\draw[flow] (flag.east)  -- node[lab, below, pos=0.4] {$\beta$} (agg.south west);
-\draw[flow] (agg.south) -- ++(0,-1.35) -| node[lab, pos=0.25, below] {broadcast $M_{t+1}$ to active clients} (clients.south);
+% ------------------------------------------------------------------ flows
+\draw[repflow] (eval.east)  -- node[lab, above] {$a_j,\mathbf{c}_j,\mathbf{n}_j$} node[lab, below, text=black!55] {84\,B} (cr.west);
+\draw[updflow] (train.east) -- node[lab, above] {update $m_j$} (cc.west);
+\draw[repflow] (cr.east) -- node[lab, above] {$r_j$} (trust.west);
+\draw[updflow] (cc.east) -- node[lab, below] {flag} (flag.west);
+\draw[updflow, dashed] ($(cc.north east)+(-0.25,0)$) to[out=60, in=-120] node[lab, sloped, below, pos=0.55] {override} ($(trust.south west)+(0.25,0)$);
+\draw[ctlflow] (trust.south) -- node[lab, right] {low trust} (flag.north);
+\draw[repflow] (trust.east) -- node[lab, above] {$\tau$} (agg.west |- trust.east);
+\draw[ctlflow] (flag.east)  -- node[lab, below] {$\beta$} (agg.west |- flag.east);
+\draw[ctlflow] (agg.south) -- ++(0,-0.78) -| node[lab, pos=0.27, above] {global model $M_{t+1}$ to active clients} ($(c3.south)+(0,0)$);
 \end{tikzpicture}

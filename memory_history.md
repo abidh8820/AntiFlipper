@@ -299,3 +299,4 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - ETA ~25 GPU h at full speed: P1 ~23:30 Nov 24, P2 ~05:00, P3 ~12:30 Nov 25 (monitor's 1d22h is pessimistic, it uses CIFAR timings for MNIST).
 - pull_results.sh now also copies results/rev and the antiflipper-rev journal (service_events_rev.log). Task Scheduler pulls: Nov 24 18:00; Nov 25 00:30, 07:00, 13:30, 20:00.
 - Monitor: ssh -t ndag@100.75.182.25 "cd ~/Desktop/AAR/AntiFlipper/Code_Journal_Experiments && ./monitor.sh" ; logs: journalctl --user -u antiflipper-rev -f ; stop: systemctl --user stop antiflipper-rev
+- 2026-11-24: redesigned Fig. 1 (TikZ): stacked client cards with local-data cylinder, colour-coded report (blue) and update (orange) paths, shadows, M6 as a tall aggregation block; compiles clean, 7 pages.

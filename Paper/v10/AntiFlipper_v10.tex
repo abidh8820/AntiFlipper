@@ -9,7 +9,7 @@
 \usepackage{pifont}
 \usepackage{url}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,shadows}
 \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
 \usepackage{cite}
 
@@ -92,7 +92,7 @@ Fig.~\ref{fig:arch} gives an overview of one round, and Algorithm~\ref{alg:af} l
 \begin{figure*}[t]
 \centering
 \resizebox{0.92\textwidth}{!}{\input{fig/architecture.tex}}
-\caption{One round of AntiFLipper. Clients send per-class evaluation counts (blue) with their model update (orange). The server scores each report against the accuracy expected for the client's label mix, cross-checks the client's update, and aggregates the trusted, non-excluded models.}
+\caption{One round of AntiFLipper. Clients send per-class evaluation counts (blue) together with their model update (orange). The server scores each report against the accuracy expected for the client's label mix, cross-checks the client's update, and aggregates the trusted, non-excluded models.}
 \label{fig:arch}
 \end{figure*}
 
