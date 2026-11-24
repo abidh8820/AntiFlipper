@@ -1,0 +1,26 @@
+\begin{table}[t]
+\centering
+\caption{Measured cost per round on CIFAR-10 non-IID (20 clients, ResNet-18 with 11.2\,M parameters) and MNIST (100 clients, 21.8\,k parameters). Client: time of the report evaluation relative to local training, measured within each run. Server: defense time (checks, trust update and aggregation) and FLTrust's root-model training. Upload: bytes per client and round beyond the model update (44.7\,MB on CIFAR-10).}
+\label{tab:cost}
+\renewcommand{\arraystretch}{1.1}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l|c|cc|c}
+\hline
+& \textbf{Client} & \multicolumn{2}{c|}{\textbf{Server (ms)}} & \textbf{Upload} \\
+\textbf{Method} & eval/train & Defense & Root & (bytes) \\
+\hline
+FedAvg & 0 & 34 & 0 & 0 \\
+Multi-Krum & 0 & 875 & 0 & 0 \\
+FLAME & 0 & 1058 & 0 & 0 \\
+LFighter & 0 & 42 & 0 & 0 \\
+FLTrust$^\dagger$ & 0 & 352 & 115 & 0 \\
+AntiFLipper-v1 (raw reports) & 9.0\% & 23 & 0 & 4 \\
+\textbf{AntiFLipper (CR+CC)} & 6.8\% & 30 & 0 & 84 \\
+\hline
+LFighter, MNIST & 0 & 7.8 & 0 & 0 \\
+FLTrust$^\dagger$, MNIST & 0 & 11.8 & 28.2 & 0 \\
+\textbf{AntiFLipper (CR+CC)}, MNIST & 24.3\% & 4.1 & 0 & 84 \\
+\hline
+\end{tabular}
+\end{table}
