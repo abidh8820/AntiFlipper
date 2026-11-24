@@ -1,21 +1,23 @@
 \begin{table}[t]
 \centering
-\caption{Measured cost per round (CIFAR-10, 20 clients, ResNet-18).}
+\caption{Cost per round on CIFAR-10 (ResNet-18, 20 clients).}
 \label{tab:cost}
 \footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}l cccc@{}}
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}l ccccc@{}}
 \toprule
-& \textbf{Server} & \textbf{Server} & \textbf{Client} & \textbf{Extra} \\
-\textbf{Method} & \textbf{data} & \textbf{time (ms)} & \textbf{overhead} & \textbf{upload} \\
+& \textbf{Server} & \multicolumn{2}{c}{\textbf{Server time (ms)}} & \textbf{Client} & \textbf{Report} \\
+\cmidrule(lr){3-4}
+\textbf{Method} & \textbf{data} & matched & in training & \textbf{overhead} & \textbf{payload} \\
 \midrule
-FedAvg & \ding{55} & 34 & 0 & 0 \\
-Multi-Krum & \ding{55} & 875 & 0 & 0 \\
-FLAME & \ding{55} & 1058 & 0 & 0 \\
-LFighter & \ding{55} & 42 & 0 & 0 \\
-FLTrust$^{\dagger}$ & \ding{51} & 352 + 115 & 0 & 0 \\
+FedAvg & \ding{55} & 183 & 34 & 0 & 0 \\
+Multi-Krum & \ding{55} & 4109 & 875 & 0 & 0 \\
+FLAME & \ding{55} & 3465 & 1058 & 0 & 0 \\
+LFighter & \ding{55} & 214 & 42 & 0 & 0 \\
+FLTrust$^{\dagger}$ & \ding{51} & 1269 & 352 + 115 & 0 & 0 \\
 \midrule
-\textbf{AntiFLipper} & \ding{55} & 30 & 6.8\% & 84\,B \\
+\textbf{AntiFLipper} & \ding{55} & 173 & 30 & 6.8\% & 84\,B \\
 \bottomrule
 \end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize Matched: identical 20 updates on CPU. In training: measured per round; excluded clients are not averaged. FLTrust: aggregation + root training.}
 \end{table}

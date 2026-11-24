@@ -182,7 +182,7 @@ def job_id(config: dict) -> str:
     return "__".join(str(value).lower().replace(".", "p") for value in fields)
 
 
-PROFILE_CHOICES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix")
+PROFILE_CHOICES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix", "rev")
 
 
 def latest_profile() -> str:

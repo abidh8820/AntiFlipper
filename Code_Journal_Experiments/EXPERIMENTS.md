@@ -87,6 +87,20 @@ has no BatchNorm and is unaffected.
 
 **Queue on the GPU machine:** `antiflipper-cr.service` (systemd user service, 3 workers) runs `run_queue.sh cr fltrust_fix`.
 
+## Rev profile — 69 jobs (internal review of paper v10, Nov 24)
+
+Experiments a reviewer of v10 asked for, in priority order (seed-major within P1).
+
+| Priority | Block | Settings | Variants | Jobs |
+|---|---|---|---|---:|
+| P1 | A8 report faking + strong skew | CIFAR-10, α_D=0.1, 40%, `report_strategy=clean_labels` | CR+CC, CR, CC only (z=3, cap 0.4) | 9 |
+| P1 | Matched CC only | main (α_D=1), attacked α_D=0.1, clean α_D=0.1 | CC only with the same z=3 and cap as AntiFLipper | 9 |
+| P1 | Clean FedAvg control | no attackers, α_D ∈ {0.1, 0.5, 1} | FedAvg | 9 |
+| P2 | A4 partial flips | label_poison_fraction ∈ {0.5, 0.25} | CR+CC, CR | 12 |
+| P3 | A9 sensitivity of the full method | MNIST non-IID, held-out seeds, attack and clean | CR+CC default, z ∈ {2.5, 3.5}, c_max ∈ {3, 9} | 30 |
+
+P1 is ~12 GPU hours with 3 workers, P2 ~5.5 h, and P3 ~7.5 h. Queue: `antiflipper-rev.service` runs `run_queue.sh rev`.
+
 ## AntiFLipper-CC
 
 Same as AntiFLipper, plus a server-side cross-check of each report. The last-layer update of each

@@ -34,16 +34,17 @@ DASH = "--"
 PROPOSED = "antiflipper_cr_cc"
 NAMES = {
     "fedavg": "FedAvg", "median": "Median", "multi_krum": "Multi-Krum", "flame": "FLAME",
-    "lfighter": "LFighter", "fltrust": r"FLTrust$^{\dagger}$",
+    "lfighter": "LFighter", "fltrust": r"FLTrust (reference)$^{\dagger}$",
+    "fltrust_bnsafe": r"FLTrust (BN-safe)$^{\dagger}$",
     "antiflipper": "Raw reports", "antiflipper_budget": "Raw reports + cap",
     "antiflipper_cc": "Raw reports + CC", "antiflipper_cc_z3": "Raw reports + CC ($z{=}3$)",
-    "cc_only": "CC only", "antiflipper_cr": "CR + cap (no CC)",
+    "cc_only": r"CC only$^{\ddagger}$", "antiflipper_cr": "CR + cap (no CC)",
     PROPOSED: r"\textbf{AntiFLipper}",
 }
 PLAIN = {"fedavg": "FedAvg", "lfighter": "LFighter", "fltrust": "FLTrust", "antiflipper": "Raw reports",
-         "antiflipper_cc": "Raw reports + CC", "cc_only": "CC only", "antiflipper_cr": "CR + cap (no CC)",
+         "antiflipper_cc": "Raw reports + CC", "cc_only": r"CC only$^{\ddagger}$", "antiflipper_cr": "CR + cap (no CC)",
          PROPOSED: "AntiFLipper"}
-BASELINES = ["fedavg", "median", "multi_krum", "flame", "lfighter", "fltrust"]
+BASELINES = ["fedavg", "median", "multi_krum", "flame", "lfighter", "fltrust", "fltrust_bnsafe"]
 # Okabe-Ito colour-blind-safe palette; the proposed method is always black and thick.
 COLORS = {"fedavg": "#999999", "lfighter": "#E69F00", "fltrust": "#56B4E9", "antiflipper": "#D55E00",
           "antiflipper_cc": "#CC79A7", "cc_only": "#009E73", "antiflipper_cr": "#0072B2", PROPOSED: "#000000"}
@@ -68,10 +69,26 @@ def load_runs() -> list[dict]:
                     config["method"] = "antiflipper_cc_z3"
                 elif config["method"] == "fltrust" and config["notes"] == "bn-safe":
                     config["method"] = "fltrust_bnsafe"
-                runs.append({**config, **json.loads(summary_path.read_text(encoding="utf-8")),
-                             "_dir": summary_path.parent, "_job": job, "_profile": profile})
+                run = {**config, **json.loads(summary_path.read_text(encoding="utf-8")),
+                       "_dir": summary_path.parent, "_job": job, "_profile": profile}
+                add_round_metrics(run)
+                runs.append(run)
     apply_free_round_timing(runs)
     return runs
+
+
+def add_round_metrics(run: dict) -> None:
+    """Last-10-round ASR (same window as accuracy) and the number of non-finite-loss rounds."""
+    import math
+    path = run["_dir"] / "round_metrics.csv"
+    if not path.exists():
+        return
+    with path.open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    asr = [float(r["asr"]) for r in rows[-10:] if r.get("asr") not in ("", None)]
+    run["last10_asr"] = statistics.fmean(asr) if asr else None
+    run["nonfinite_rounds"] = sum(1 for r in rows if not math.isfinite(float(r.get("loss") or "nan")))
+    run["full_detected"] = 1.0 if run.get("full_detection_round") not in (None, "") else 0.0
 
 
 TIMING_FIELDS = ("defense_seconds", "client_train_seconds", "client_eval_seconds", "root_training_seconds", "round_seconds")
@@ -124,18 +141,35 @@ def headline(runs, method, dataset="CIFAR10", distribution="NON_IID"):
                   report_strategy="honest", malicious_client_fraction=0.4)
 
 
+def experiment_rows(runs, experiment, method):
+    return select(runs, experiment=experiment, method=method)
+
+
 def clean(runs, method, alpha):
     return select(runs, experiment="A2_clean_heterogeneity", method=method, dirichlet_alpha=alpha)
 
 
 def attacked_skew(runs, method):
+    if method == "fltrust_bnsafe":
+        return select(runs, experiment="A2_attacked_heterogeneity", method=method)
     return select(runs, experiment="A2_attacked_heterogeneity", method=method)
 
 
 def adaptive(runs, method):
-    if method in ("lfighter", "fltrust", "cc_only", "fedavg"):
+    if method in ("lfighter", "fltrust", "fltrust_bnsafe", "cc_only", "fedavg"):
         return headline(runs, method)  # ignores reports: faking has no effect
     return select(runs, experiment="A7_adaptive_report", method=method)
+
+
+def full_detect_text(rows) -> str:
+    """'k/n' seeds in which every attacker was excluded, with the mean round over those seeds."""
+    if not rows:
+        return DASH
+    hits = [r for r in rows if r.get("full_detection_round") not in (None, "")]
+    if not hits:
+        return f"0/{len(rows)}"
+    mean = statistics.fmean(float(r["full_detection_round"]) for r in hits)
+    return f"{len(hits)}/{len(rows)} ({mean:.0f})"
 
 
 def ratio(runs, method, p):
@@ -194,30 +228,30 @@ def table_main(runs) -> None:
     methods = BASELINES + [PROPOSED]
     detects = lambda m: m not in ("fedavg", "median")
     H = lambda d, s: [headline(runs, m, d, s) for m in methods]
-    det = lambda metric: [headline(runs, m) if detects(m) else None for m in methods]
+    det = [headline(runs, m) if detects(m) else None for m in methods]
     columns = [
         (Column("last10_accuracy_mean", 100, 1, std=True), H("CIFAR10", "NON_IID")),
-        (Column("final_asr", 100, 1, best="min"), H("CIFAR10", "NON_IID")),
-        (Column("final_precision", 1, 2), det("p")),
-        (Column("final_recall", 1, 2), det("r")),
-        (Column("final_fpr", 1, 2, best="min"), det("f")),
+        (Column("last10_asr", 100, 1, best="min"), H("CIFAR10", "NON_IID")),
+        (Column("final_precision", 1, 2), det),
+        (Column("final_recall", 1, 2), det),
+        (Column("final_fpr", 1, 2, best="min"), det),
         (Column("last10_accuracy_mean", 100, 1, std=True), H("CIFAR10", "IID")),
         (Column("last10_accuracy_mean", 100, 1, std=True), H("MNIST", "NON_IID")),
         (Column("last10_accuracy_mean", 100, 1, std=True), H("MNIST", "IID")),
-        (Column("mean_defense_seconds", 1000, 0, best="min"), H("CIFAR10", "NON_IID")),
     ]
     lines = [
         r"\begin{table*}[t]", r"\centering",
-        r"\caption{Comparison with existing defenses under 40\% label-flipping clients.}",
+        r"\caption{Comparison with existing defenses under 40\% label-flipping clients (mean$\pm$std over three seeds).}",
         r"\label{tab:main}", r"\footnotesize", r"\setlength{\tabcolsep}{4.5pt}",
-        r"\begin{tabular}{@{}l ccccc c cc c@{}}", r"\toprule",
-        r"& \multicolumn{5}{c}{\textbf{CIFAR-10, non-IID} ($\alpha_D{=}1$)} & \textbf{CIFAR-10} & \multicolumn{2}{c}{\textbf{MNIST}} & \textbf{Server} \\",
+        r"\begin{tabular}{@{}l ccccc c cc@{}}", r"\toprule",
+        r"& \multicolumn{5}{c}{\textbf{CIFAR-10, non-IID} ($\alpha_D{=}1$)} & \textbf{CIFAR-10} & \multicolumn{2}{c}{\textbf{MNIST}} \\",
         r"\cmidrule(lr){2-6}\cmidrule(lr){7-7}\cmidrule(lr){8-9}",
-        r"\textbf{Method} & Acc.\,(\%)\,$\uparrow$ & ASR\,(\%)\,$\downarrow$ & Prec.\,$\uparrow$ & Rec.\,$\uparrow$ & FPR\,$\downarrow$ & IID Acc. & non-IID Acc. & IID Acc. & time (ms) \\",
+        r"\textbf{Method} & Acc.\,(\%)\,$\uparrow$ & ASR\,(\%)\,$\downarrow$ & Prec.\,$\uparrow$ & Rec.\,$\uparrow$ & FPR\,$\downarrow$ & IID Acc. & non-IID Acc. & IID Acc. \\",
         r"\midrule",
     ]
     lines += render([NAMES[m] for m in methods], columns, rule_after={len(methods) - 2})
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}", ""]
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize $^{\dagger}$Uses a 100-sample clean root dataset at the server. Reference: rescales all tensors including BatchNorm statistics; BN-safe: trainable parameters only.}", r"\end{table*}", ""]
     write("table_main.tex", "\n".join(lines))
 
 
@@ -229,30 +263,37 @@ def table_ablation(runs) -> None:
                 ("antiflipper_cr", r"\ding{51}", r"\ding{55}", r"\ding{51}"),
                 (PROPOSED, r"\ding{51}", r"\ding{51}", r"\ding{51}")]
     methods = [v[0] for v in variants]
+    main = [headline(runs, m) for m in methods]
+    fake = [adaptive(runs, m) for m in methods]
+    cln = [clean(runs, m, 0.1) for m in methods]
+    skew = [attacked_skew(runs, m) for m in methods]
     columns = [
-        (Column("last10_accuracy_mean", 100, 1), [headline(runs, m) for m in methods]),
-        (Column("final_fpr", 1, 2, best="min"), [headline(runs, m) for m in methods]),
-        (Column("last10_accuracy_mean", 100, 1), [adaptive(runs, m) for m in methods]),
-        (Column("final_recall", 1, 2), [adaptive(runs, m) for m in methods]),
-        (Column("last10_accuracy_mean", 100, 1), [clean(runs, m, 0.1) for m in methods]),
-        (Column("honest_excluded", 1, 1, best="min"), [clean(runs, m, 0.1) for m in methods]),
-        (Column("last10_accuracy_mean", 100, 1), [attacked_skew(runs, m) for m in methods]),
-        (Column("final_recall", 1, 2), [attacked_skew(runs, m) for m in methods]),
+        (Column("last10_accuracy_mean", 100, 1), main),
+        (Column("final_fpr", 1, 2, best="min"), main),
+        (Column("last10_accuracy_mean", 100, 1), fake),
+        (Column("final_recall", 1, 2), fake),
+        (Column("final_fpr", 1, 2, best="min"), fake),
+        (Column("last10_accuracy_mean", 100, 1, std=True), cln),
+        (Column("final_accuracy", 100, 1, std=True), cln),
+        (Column("honest_excluded", 1, 1, best="min"), cln),
+        (Column("last10_accuracy_mean", 100, 1), skew),
+        (Column("final_recall", 1, 2), skew),
     ]
     labels = [f"{NAMES[m]} & {cr} & {cc} & {cap}" for m, cr, cc, cap in variants]
     lines = [
         r"\begin{table*}[t]", r"\centering",
-        r"\caption{Ablation on CIFAR-10. Each component is added to or removed from AntiFLipper.}",
-        r"\label{tab:ablation}", r"\footnotesize", r"\setlength{\tabcolsep}{4.5pt}",
-        r"\begin{tabular}{@{}l ccc cc cc cc cc@{}}", r"\toprule",
-        r"& & & & \multicolumn{2}{c}{\textbf{40\% attack}} & \multicolumn{2}{c}{\textbf{40\% report-faking}} & \multicolumn{2}{c}{\textbf{No attack}} & \multicolumn{2}{c}{\textbf{40\% attack}} \\",
-        r"& & & & \multicolumn{2}{c}{$\alpha_D{=}1$} & \multicolumn{2}{c}{$\alpha_D{=}1$} & \multicolumn{2}{c}{$\alpha_D{=}0.1$} & \multicolumn{2}{c}{$\alpha_D{=}0.1$} \\",
-        r"\cmidrule(lr){5-6}\cmidrule(lr){7-8}\cmidrule(lr){9-10}\cmidrule(lr){11-12}",
-        r"\textbf{Variant} & CR & CC & Cap & Acc. & FPR & Acc. & Rec. & Acc. & Excl.\,$\downarrow$ & Acc. & Rec. \\",
+        r"\caption{Ablation on CIFAR-10: each component added to or removed from AntiFLipper (mean over three seeds).}",
+        r"\label{tab:ablation}", r"\footnotesize", r"\setlength{\tabcolsep}{3.6pt}",
+        r"\begin{tabular}{@{}l ccc cc ccc ccc cc@{}}", r"\toprule",
+        r"& & & & \multicolumn{2}{c}{\textbf{40\% attack}} & \multicolumn{3}{c}{\textbf{40\% report faking}} & \multicolumn{3}{c}{\textbf{No attack}} & \multicolumn{2}{c}{\textbf{40\% attack}} \\",
+        r"& & & & \multicolumn{2}{c}{$\alpha_D{=}1$} & \multicolumn{3}{c}{$\alpha_D{=}1$} & \multicolumn{3}{c}{$\alpha_D{=}0.1$} & \multicolumn{2}{c}{$\alpha_D{=}0.1$} \\",
+        r"\cmidrule(lr){5-6}\cmidrule(lr){7-9}\cmidrule(lr){10-12}\cmidrule(lr){13-14}",
+        r"\textbf{Variant} & CR & CC & Cap & Acc. & FPR & Acc. & Rec. & FPR & Acc.\,(last 10) & Acc.\,(final) & Excl.\,$\downarrow$ & Acc. & Rec. \\",
         r"\midrule",
     ]
     lines += render(labels, columns, rule_after={len(methods) - 2})
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}", ""]
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Acc.: last-10-round mean unless marked. Excl.: honest clients excluded (of 20). CC uses $z{=}3$ in AntiFLipper and $z{=}2.5$ in the other variants. $^{\ddagger}$Uniform trust, no cap; it ignores reports, so faking has no effect.}", r"\end{table*}", ""]
     write("table_ablation.tex", "\n".join(lines))
 
 
@@ -261,44 +302,64 @@ def table_skew(runs) -> None:
     rows = [attacked_skew(runs, m) for m in methods]
     det = [r if m != "fedavg" else None for m, r in zip(methods, rows)]
     columns = [(Column("last10_accuracy_mean", 100, 1, std=True), rows),
-               (Column("final_precision", 1, 2), det),
                (Column("final_recall", 1, 2), det),
                (Column("final_fpr", 1, 2, best="min"), det)]
+    grid = [col.cells(sets) for col, sets in columns]
     lines = [
         r"\begin{table}[t]", r"\centering",
         r"\caption{Strong heterogeneity: CIFAR-10, $\alpha_D{=}0.1$, 40\% attackers.}",
-        r"\label{tab:skew}", r"\footnotesize", r"\setlength{\tabcolsep}{5pt}",
+        r"\label{tab:skew}", r"\footnotesize", r"\setlength{\tabcolsep}{4.5pt}",
         r"\begin{tabular}{@{}l cccc@{}}", r"\toprule",
-        r"\textbf{Method} & Acc.\,(\%) & Prec. & Rec. & FPR \\", r"\midrule",
+        r"\textbf{Method} & Acc.\,(\%) & Rec. & FPR & All found \\", r"\midrule",
     ]
-    lines += render([NAMES[m] for m in methods], columns, rule_after={2})
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
+    for i, method in enumerate(methods):
+        found = full_detect_text(rows[i]) if method in ("antiflipper", PROPOSED) else "n/a"
+        lines.append(f"{NAMES[method].replace(' (reference)', '')} & " + " & ".join(g[i] for g in grid) + f" & {found}" + r" \\")
+        if i == 2:
+            lines.append(r"\midrule")
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize All found: seeds in which every attacker was excluded (mean round).}", r"\end{table}", ""]
     write("table_skew.tex", "\n".join(lines))
+
+
+MATCHED_TIMING = REPO / "Results_Backup_2026-11-23" / "timing_matched" / "fixed_workload_timing.csv"
+
+
+def matched_timing() -> dict[str, float]:
+    if not MATCHED_TIMING.exists():
+        return {}
+    with MATCHED_TIMING.open(encoding="utf-8") as handle:
+        return {r["method"]: float(r["mean_seconds"]) * 1000 for r in csv.DictReader(handle)
+                if r["dataset"] == "CIFAR10" and r["mean_seconds"] not in ("", None)}
 
 
 def table_cost(runs) -> None:
     methods = ["fedavg", "multi_krum", "flame", "lfighter", "fltrust", PROPOSED]
+    matched = matched_timing()
     lines = [
         r"\begin{table}[t]", r"\centering",
-        r"\caption{Measured cost per round (CIFAR-10, 20 clients, ResNet-18).}",
-        r"\label{tab:cost}", r"\footnotesize", r"\setlength{\tabcolsep}{4pt}",
-        r"\begin{tabular}{@{}l cccc@{}}", r"\toprule",
-        r"& \textbf{Server} & \textbf{Server} & \textbf{Client} & \textbf{Extra} \\",
-        r"\textbf{Method} & \textbf{data} & \textbf{time (ms)} & \textbf{overhead} & \textbf{upload} \\", r"\midrule",
+        r"\caption{Cost per round on CIFAR-10 (ResNet-18, 20 clients).}",
+        r"\label{tab:cost}", r"\footnotesize", r"\setlength{\tabcolsep}{3.2pt}",
+        r"\begin{tabular}{@{}l ccccc@{}}", r"\toprule",
+        r"& \textbf{Server} & \multicolumn{2}{c}{\textbf{Server time (ms)}} & \textbf{Client} & \textbf{Report} \\",
+        r"\cmidrule(lr){3-4}",
+        r"\textbf{Method} & \textbf{data} & matched & in training & \textbf{overhead} & \textbf{payload} \\", r"\midrule",
     ]
     for method in methods:
         rows = headline(runs, method)
         server, _ = stat(rows, "mean_defense_seconds", 1000)
         root, _ = stat(rows, "mean_root_training_seconds", 1000)
-        time = f"{server:.0f}" + (f" + {root:.0f}" if method == "fltrust" else "")
+        observed = f"{server:.0f}" + (f" + {root:.0f}" if method == "fltrust" else "")
+        bench = f"{matched[method]:.0f}" if method in matched else DASH
         overhead, _ = stat(rows, "mean_client_eval_overhead", 100)
         client = rf"{overhead:.1f}\%" if method == PROPOSED else "0"
         data = r"\ding{51}" if method == "fltrust" else r"\ding{55}"
-        upload = "84\\,B" if method == PROPOSED else "0"
+        payload = "84\\,B" if method == PROPOSED else "0"
         if method == PROPOSED:
             lines.append(r"\midrule")
-        lines.append(f"{NAMES[method]} & {data} & {time} & {client} & {upload}" + r" \\")
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
+        lines.append(f"{NAMES[method].replace(' (reference)', '')} & {data} & {bench} & {observed} & {client} & {payload}" + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Matched: identical 20 updates on CPU. In training: measured per round; excluded clients are not averaged. FLTrust: aggregation + root training.}", r"\end{table}", ""]
     write("table_cost.tex", "\n".join(lines))
 
 
@@ -314,7 +375,7 @@ def table_sensitivity(runs) -> None:
                (Column("final_fpr", 1, 2, best="min"), cln)]
     lines = [
         r"\begin{table}[t]", r"\centering",
-        r"\caption{Sensitivity to $\rho$, $c_{\max}$ and $z$ (MNIST, non-IID).}",
+        r"\caption{Sensitivity of the trust, flag and consistency parameters (raw reports + CC, MNIST non-IID).}",
         r"\label{tab:sensitivity}", r"\footnotesize", r"\setlength{\tabcolsep}{5pt}",
         r"\begin{tabular}{@{}l ccc@{}}", r"\toprule",
         r"& \multicolumn{2}{c}{\textbf{40\% attack}} & \textbf{No attack} \\", r"\cmidrule(lr){2-3}\cmidrule(lr){4-4}",
@@ -419,8 +480,24 @@ def figure_trajectories(runs) -> None:
 
 # ----------------------------------------------------------------------------- in-text numbers
 
+def override_share(rows) -> str:
+    """Share of client-rounds in which the consistency check marked a client inconsistent."""
+    flagged = total = 0
+    for run in rows:
+        path = run["_dir"] / "client_history.csv"
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                total += 1
+                flagged += row.get("inconsistent") == "1"
+    return DASH if not total else f"{100 * flagged / total:.1f}"
+
+
 def numbers(runs) -> None:
     P, R = PROPOSED, "antiflipper"
+    timing = matched_timing()
+    mt = lambda m: f"{timing[m]:.0f}" if m in timing else DASH
     v = lambda rows, metric, scale=1.0, d=1: (lambda m: DASH if m is None else f"{m:.{d}f}")(stat(rows, metric, scale)[0])
     s = lambda rows, metric, scale=1.0, d=1: (lambda m: DASH if m is None else f"{m:.{d}f}")(stat(rows, metric, scale)[1])
     acc = "last10_accuracy_mean"
@@ -434,7 +511,7 @@ def numbers(runs) -> None:
         "headFPRcconly": v(headline(runs, "cc_only"), "final_fpr", 1, 2),
         "headRecallLFighter": v(headline(runs, "lfighter"), "final_recall", 1, 2),
         "headRecallFLAME": v(headline(runs, "flame"), "final_recall", 1, 2),
-        "headASR": v(headline(runs, P), "final_asr", 100), "headASRFedAvg": v(headline(runs, "fedavg"), "final_asr", 100),
+        "headASR": v(headline(runs, P), "last10_asr", 100), "headASRFedAvg": v(headline(runs, "fedavg"), "last10_asr", 100),
         "headDet": v(headline(runs, P), "full_detection_round", 1, 0),
         "defMs": v(headline(runs, P), "mean_defense_seconds", 1000, 0),
         "defMsFedAvg": v(headline(runs, "fedavg"), "mean_defense_seconds", 1000, 0),
@@ -472,6 +549,21 @@ def numbers(runs) -> None:
         "bnsafeHead": v(select(runs, experiment="A1_headline", method="fltrust_bnsafe", dataset="CIFAR10", distribution="NON_IID"), acc, 100),
         "mnistAcc": v(headline(runs, P, "MNIST", "NON_IID"), acc, 100),
         "iidAcc": v(headline(runs, P, "CIFAR10", "IID"), acc, 100),
+        "skewFull": full_detect_text(attacked_skew(runs, P)).split(" ")[0],
+        "skewDetHits": (lambda h: DASH if not h else f"{statistics.fmean(float(r['full_detection_round']) for r in h):.0f}")(
+            [r for r in attacked_skew(runs, P) if r.get("full_detection_round") not in (None, "")]),
+        "skewMissed": str(sum(round((1 - float(r["final_recall"])) * len(r.get("attackers") or [])) for r in attacked_skew(runs, P))),
+        "fltrustNanRuns": str(sum(1 for r in headline(runs, "fltrust") if r.get("nonfinite_rounds"))),
+        "fltrustNanRounds": str(sum(int(r.get("nonfinite_rounds") or 0) for r in headline(runs, "fltrust"))),
+        "bnsafeFPR": v(headline(runs, "fltrust_bnsafe"), "final_fpr", 1, 2),
+        "cleanFinal": v(clean(runs, P, 0.1), "final_accuracy", 100),
+        "cleanFinalMin": f"{min(100 * float(r['final_accuracy']) for r in clean(runs, P, 0.1)):.1f}",
+        "cleanAccStd": s(clean(runs, P, 0.1), acc, 100), "cleanAccCROnlyStd": s(clean(runs, "antiflipper_cr", 0.1), acc, 100),
+        "ccOverrideShare": override_share(clean(runs, P, 0.1)),
+        "ratioFPRmax": f"{max(float(r['final_fpr']) for p_ in (0.1, 0.2, 0.3) for r in ratio(runs, P, p_)):.2f}",
+        "matchedOurs": mt(PROPOSED), "matchedFedAvg": mt("fedavg"), "matchedFLTrust": mt("fltrust"),
+        "matchedKrum": mt("multi_krum"), "matchedFLAME": mt("flame"), "matchedLFighter": mt("lfighter"),
+        "matchedRaw": mt("antiflipper"),
         "nRuns": str(len([r for r in runs if r["method"] != "fltrust_bnsafe"])),
     }
     write("numbers.tex", "% generated by make_results.py -- do not edit\n" +

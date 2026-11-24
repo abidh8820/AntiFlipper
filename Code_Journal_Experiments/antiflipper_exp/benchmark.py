@@ -15,27 +15,37 @@ from .config import ANTIFLIPPER_METHODS, CC_V2, CONSISTENCY_METHODS, ExperimentC
 from .models import create_model
 
 
-METHODS = ("antiflipper", "antiflipper_cc", CC_V2, "cc_only", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
+METHODS = ("antiflipper", "antiflipper_cc", "antiflipper_cr", "antiflipper_cr_cc", CC_V2, "cc_only", "fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust")
 
 
 def _antiflipper_server_work(method: str, states: list[dict], base: dict, count: int, iteration: int) -> list[float]:
     """Server-side work AntiFLipper does before aggregation, so the benchmark is not
     just a weighted average: (cc) consistency check + trust update + thresholding."""
-    from .engine import _update_cc_v2, _update_trust
+    from .engine import ClientResult, NUM_CLASSES, _class_residuals, _update_cc_v2, _update_trust
 
     inconsistent = set()
+    z_cut = 3.0 if method == "antiflipper_cr_cc" else 2.5
     if method in CONSISTENCY_METHODS:
-        _, flags = update_consistency(states, base, 2.5)
+        _, flags = update_consistency(states, base, z_cut)
         inconsistent = set(np.flatnonzero(flags))
-    cfg = ExperimentConfig("bench", "MNIST", "IID", method, 0, rounds=1, num_clients=count)
+    cfg = ExperimentConfig("bench", "MNIST", "IID", method, 0, rounds=1, num_clients=count,
+                           **({"max_exclusion_fraction": 0.4} if method.startswith("antiflipper_cr") else {}))
     rng = np.random.default_rng(iteration)
     reports = {i: float(x) for i, x in enumerate(rng.uniform(0.5, 1.0, count))}
     trust = {i: 1.0 / count for i in range(count)}
+    if method.startswith("antiflipper_cr"):
+        # Class-conditional residual from synthetic per-class counts (same work as in training).
+        results = []
+        for i in range(count):
+            n = rng.integers(0, 300, NUM_CLASSES)
+            results.append(ClientResult(i, {}, 0.0, reports[i], False, 0,
+                                        class_correct=np.floor(n * rng.uniform(0.3, 1.0, NUM_CLASSES)), class_count=n))
+        reports = _class_residuals(results, trust)
     counters = dict.fromkeys(reports, 0)
     if method == CC_V2:
         _update_cc_v2(cfg, reports, inconsistent, reports.copy(), trust, counters, cfg.grace_rounds)
     else:
-        if method == "antiflipper_cc" and inconsistent:
+        if method in ("antiflipper_cc", "antiflipper_cr_cc") and inconsistent:
             floor = min(reports.values())
             for client_id in inconsistent:
                 reports[client_id] = floor
@@ -90,7 +100,7 @@ def fixed_workload_benchmark(output: Path, iterations: int = 5) -> list[dict]:
                     "dataset": dataset, "method": method, "parameters": parameters, "updates": count,
                     "iterations": len(times), "mean_seconds": statistics.fmean(times) if times else "",
                     "std_seconds": statistics.stdev(times) if len(times) > 1 else (0.0 if times else ""), "error": error,
-                    "workload": "identical deterministic synthetic model states on CPU; malicious_fraction=0.4; AntiFLipper rows include trust update (+consistency check for _cc); FLTrust excludes root training",
+                    "workload": "identical deterministic synthetic model states on CPU; malicious_fraction=0.4; AntiFLipper rows include trust update (+class-conditional residual for _cr, +consistency check for _cc); FLTrust excludes root training",
                 })
             del states, base, root
     with (output / "fixed_workload_timing.csv").open("w", newline="", encoding="utf-8") as handle:

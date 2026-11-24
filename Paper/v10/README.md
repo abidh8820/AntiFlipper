@@ -70,3 +70,15 @@ exclude rounds that shared the machine with other workloads.
 2. **Partial participation / dropout** (R1-3): sample, say, 50% of clients per round. This needs a small code change.
 3. **Privacy variant** (R1-5, R3-4): implement the secure-aggregation sums plus the client-side residual. Detection is unchanged by construction; only the protocol changes.
 4. CRFL comparison, a third dataset or domain, and edge-hardware timing: larger efforts.
+
+## Internal review of v10 (2026-11-24, "major revision") → changes
+
+| Point | Change |
+|---|---|
+| 1. Abstract overstates detection under strong skew | Abstract and results now give recall 0.96 and full detection in 2/3 seeds (mean round over those seeds), with 1 attacker never excluded in the third; Table III has an "All found" column. "Every attacker without false positives" is limited to α_D=1 (main and faking); the ratio sweep reports FPR up to 0.14. |
+| 2. Zero exclusions can hide unstable training | Ablation table adds final-round accuracy (mean ± std) for clean α_D=0.1; text reports the 10.3% final round with all clients active. CC overrides occurred in only 0.6% of client-rounds, so the gap is no longer attributed to CC; the cause is stated as not isolated. Clean FedAvg control queued (rev P1). |
+| 3. Ablation shows complementarity, not necessity | Text says so explicitly; footnote states that the variants differ in z and cap; faking FPR column added. Matched CC-only (z=3, cap) and faking + strong skew queued (rev P1). Sensitivity table relabelled "raw reports + CC"; full-method sensitivity queued (rev P3). |
+| 4. Theory overclaims | Shared per-class accuracy assumption stated; the bias depends on the flippers' trust-weighted share of class-k samples (w_k), not on their trust share; median breakdown no longer claimed to imply cosine separation; FedAvg convergence claim removed (trust weights keep changing), trajectories presented as empirical evidence. Cap guarantee kept. |
+| 5. Baseline and timing reporting | Both FLTrust implementations in Table I, with non-finite-loss counts in the text (6 rounds across 3 runs); BN handling called an implementation choice. Matched-count server timing added (identical 20 updates, CPU benchmark: AntiFLipper 173 ms vs. FedAvg 183 ms, FLTrust 1269 ms); observed per-round times labelled as not matched; "otherwise idle" replaced by "excluding rounds known to have overlapped other workloads". 84 B called report payload. ASR now uses the same last-10-round window as accuracy. |
+
+**Queued, not run:** `rev` profile (69 jobs, ~25 GPU hours with 3 workers): faking + strong skew, matched CC-only, clean FedAvg control, partial flips, full-method sensitivity. When it finishes, extend `make_results.py` to use A8 (faking × skew), A9 (sensitivity, replacing Table V), the matched CC-only rows, the FedAvg controls (Fig. 2 and the ablation), and A4 (partial flips).

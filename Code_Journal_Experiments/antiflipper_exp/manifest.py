@@ -9,7 +9,7 @@ from .config import CC_V2, ExperimentConfig
 
 
 SEEDS = (7, 19, 31)
-PROFILES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix")
+PROFILES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix", "rev")
 # Held out from every reported comparison; used only for hyperparameter sensitivity.
 SENSITIVITY_SEEDS = (101, 113, 127)
 
@@ -197,6 +197,43 @@ def fltrust_fix_jobs() -> list[ExperimentConfig]:
             for job in core_jobs() if job.method == "fltrust" and job.dataset == "CIFAR10"]
 
 
+CC_MATCHED = {"method": "cc_only", "max_exclusion_fraction": 0.4, "consistency_z": 3.0, "notes": "matched z3 cap"}
+FEDAVG = {"method": "fedavg"}
+
+
+def rev_jobs() -> list[ExperimentConfig]:
+    """Experiments requested by the internal review of paper v10 (priority order).
+
+    P1 (seed-major): report faking under strong skew; CC only with the same z and cap as
+    AntiFLipper; clean FedAvg controls. P2: partial flips. P3: sensitivity of the full method.
+    """
+    def job(dataset, distribution, seed, experiment, variant, tags, **overrides):
+        return replace(base(dataset, distribution, variant["method"], seed, experiment),
+                       tags=tags, **{**{k: v for k, v in variant.items() if k != "method"}, **overrides})
+
+    p1 = (
+        ("A8_adaptive_skew", {"dirichlet_alpha": 0.1, "report_strategy": "clean_labels"}, (CR_CC, CR, CC_MATCHED)),
+        ("A1_headline", {}, (CC_MATCHED,)),
+        ("A2_attacked_heterogeneity", {"dirichlet_alpha": 0.1}, (CC_MATCHED,)),
+        ("A2_clean_heterogeneity", {"dirichlet_alpha": 0.1, "malicious_client_fraction": 0.0}, (CC_MATCHED, FEDAVG)),
+        ("A2_clean_heterogeneity", {"dirichlet_alpha": 0.5, "malicious_client_fraction": 0.0}, (FEDAVG,)),
+        ("A2_clean_heterogeneity", {"dirichlet_alpha": 1.0, "malicious_client_fraction": 0.0}, (FEDAVG,)),
+    )
+    jobs: list[ExperimentConfig] = []
+    for seed in SEEDS:
+        for experiment, overrides, variants in p1:
+            for variant in variants:
+                jobs.append(job("CIFAR10", "NON_IID", seed, experiment, variant, ("REV", "P1"), **overrides))
+    for seed, fraction, variant in itertools.product(SEEDS, (0.5, 0.25), (CR_CC, CR)):
+        jobs.append(job("CIFAR10", "NON_IID", seed, "A4_partial_flip", variant, ("REV", "P2"), label_poison_fraction=fraction))
+    sensitivity = [{"notes": "default"}, {"consistency_z": 2.5, "notes": "z=2.5"}, {"consistency_z": 3.5, "notes": "z=3.5"},
+                   {"counter_threshold": 3, "notes": "counter=3"}, {"counter_threshold": 9, "notes": "counter=9"}]
+    for seed, ratio, change in itertools.product(SENSITIVITY_SEEDS, (0.4, 0.0), sensitivity):
+        jobs.append(job("MNIST", "NON_IID", seed, "A9_sensitivity_full", {**CR_CC, **change}, ("REV", "P3"),
+                        malicious_client_fraction=ratio))
+    return _dedupe(jobs)
+
+
 def build(profile: str) -> list[ExperimentConfig]:
     if profile == "smoke":
         return smoke_jobs()
@@ -204,6 +241,8 @@ def build(profile: str) -> list[ExperimentConfig]:
         return cr_jobs()
     if profile == "fltrust_fix":
         return fltrust_fix_jobs()
+    if profile == "rev":
+        return rev_jobs()
     if profile not in PROFILES:
         raise ValueError(f"Unknown profile: {profile}")
     reference = core_jobs()
