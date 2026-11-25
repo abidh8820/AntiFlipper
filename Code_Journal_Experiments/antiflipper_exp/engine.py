@@ -302,7 +302,11 @@ def _update_trust(
 
     if round_index < cfg.grace_rounds:
         return
-    n_eligible = len(reports)
+    # Trust is normalized over all non-excluded clients, so the relative threshold scales
+    # by their count, not by how many were sampled this round. With full participation
+    # the two are equal (previous runs unchanged); with partial participation the
+    # sampled count would make every client look under-trusted.
+    n_eligible = len(trust) - len(excluded)
     newly_excluded: set[int] = set()
     for client_id in reports:
         if uses_reports:

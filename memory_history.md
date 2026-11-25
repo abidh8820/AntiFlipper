@@ -356,3 +356,42 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - rev2: batch 1 done (fedavg_weighted α0.1 clean+attacked, s7/s19; ~118 min per batch). Batch 2 (s31 weighted + partial-flip FedAvg s7) started 16:24; batch 3 expected to finish ~20:20.
 - Preliminary (2 seeds): weighted FedAvg clean α0.1 48.1/62.7 (AntiFLipper 3-seed mean 54.3); attacked 40.4/55.4 (AntiFLipper 49.1±11.9). Close; wait for s31.
 - SPARCFL runner 411313 still frozen (T); watcher resumes it when rev2 ends.
+- Proposed further runs (partial participation, LFighter/FLTrust partial flips, extra α0.1 seeds). User: SPARCFL has GPU priority, but suggesting runs is fine. Full rewrite (Paper/v11, top quality) scheduled for 20:30 today, after rev2 ends.
+
+## 2026-11-25 (20:30, scheduled) — rev2 done, Paper v11 rewrite
+- rev2 12/12 completed 20:25; the watcher resumed the SPARCFL runner (411313) at 20:26. Pulled with pull_results.sh (414 runs).
+- rev2 results (CIFAR-10):
+  - α0.1 clean: sample-weighted FedAvg 59.7±10.5 vs AntiFLipper 54.3±9.8; weighted is ahead in 3/3 seeds.
+  - α0.1 attacked: AntiFLipper 49.1 vs weighted FedAvg 44.8 (ahead 2/3) and equal-weight FedAvg 43.8 (3/3). ASR 7.5 vs 21.4 / 18.7; lowest of all methods in every seed.
+  - Partial flips at α1: FedAvg 71.9 / 73.6 vs AntiFLipper 71.3 / 72.1. The attack is weak; ASR 5.0 → 3.2.
+- New finding: faked reports are not uninformative.
+  - α1: residual AUC 0.70–0.73 (the model has trained on the attackers' flipped samples), which explains raw/CR recall 0.62–0.67.
+  - α0.1: raw faked-report AUC 0.64–0.73, but the residual drops it to 0.46–0.58 (self-inclusion / class-dominance bias). Prop. 3 now states its assumption.
+- Paper/v11 (v10 untouched):
+  - Full rewrite, 7 pages including references (GLOBECOM 6+1), zero LaTeX warnings.
+  - Table III gains sample-weighted FedAvg and ASR; Table IV gains FedAvg Acc/ASR; Table II gains a weighted-FedAvg row; Fig. 2 gains a weighted marker. The sensitivity table moved into the text.
+  - Bib casing fixed. New macros: wins, ASR, fakeAuc*, sensAcc*. README rewritten.
+- Decisions:
+  - Report that weighted FedAvg beats AntiFLipper without attackers under strong skew.
+  - Lead the strong-skew attacked result with ASR (lowest in every seed).
+  - Frame partial flips as detection only.
+  - Target 7 pages so the paper is submittable.
+- Next / open:
+  - Optional runs (ask first; SPARCFL has priority): a leave-one-out/robust Â_k for faking under skew; sample-weighted trust; partial participation.
+  - Nothing committed.
+
+## 2026-11-25 (late) — 1-worker time estimate for partial participation
+- Asked whether one worker could finish the partial-participation runs in 12 h. Code already supports `participation` (engine.py samples clients each round); there is no profile for it yet.
+- Timing data: the last single-worker hour of the cr profile ran at ~21 s/round on CIFAR-10 (≈35 min per 100-round run); with 4 workers it is ~50–70 s/round each. Running next to SPARCFL will be slower; the slowdown is not measured.
+- Estimate: 6–9 runs at 50% participation (AntiFLipper + FedAvg, optionally a clean AntiFLipper row; 3 seeds) take about 2–4 h alone, or roughly 4–8 h if sharing the GPU with SPARCFL. That fits in 12 h. Nothing launched; waiting for the user's go-ahead.
+
+## 2026-11-25 23:40 — rev3 launched (SPARCFL frozen)
+- User: stop SPARCFL, run all partial experiments for AntiFLipper, LFighter and FLTrust as fast as possible, then resume SPARCFL.
+- New profile `rev3` (24 CIFAR-10 jobs, 3 seeds, seed-major):
+  - A10_partial_participation: participation 0.5 at the headline setting for AntiFLipper (cr_cc), LFighter, FLTrust (bn-safe) and FedAvg. FedAvg is included as the reference.
+  - A4_partial_flip at 50% and 25% for LFighter and FLTrust (bn-safe). AntiFLipper and FedAvg already have these runs.
+- Code fix in engine.py `_update_trust`: the relative threshold now uses the count of non-excluded clients instead of the number sampled this round. Full-participation runs are unchanged. Smoke-tested locally at 50% participation for all four methods.
+- Deployed engine.py, manifest.py and antiflipper-rev3.service to NDAG (originals in ~/af_backup_rev3). The 4-worker service started 23:40:41.
+- The whole SPARCFL tree is SIGSTOPped (runner 411313 plus children 608100, 673866, 608102, 608104). The watcher ~/af_rev3_handoff.sh (log ~/af_rev3_handoff.log) resumes them when rev3 ends, or after 20 h at the latest. The pid list is in ~/af_rev3_frozen_pids.txt.
+- pull_results.sh and Paper/v11/make_results.py now include rev3. The paper does not use the rev3 results yet. Not committed.
+- First rounds of rev3: ~37 s/round per job at 50% participation with 4 workers (GPU 100%), about 1 h per participation run and about 2 h per partial-flip run. ETA for all 24 is about 9–10 h, i.e. around 09:00–10:00 on 2026-11-26.

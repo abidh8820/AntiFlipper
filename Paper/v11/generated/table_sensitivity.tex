@@ -1,0 +1,21 @@
+\begin{table}[t]
+\centering
+\caption{Parameter sensitivity of AntiFLipper (MNIST non-IID, held-out seeds).}
+\label{tab:sensitivity}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}l ccc@{}}
+\toprule
+& \multicolumn{2}{c}{\textbf{40\% attack}} & \textbf{No attack} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-4}
+\textbf{Setting} & Acc.\,(\%) & Rec. & FPR \\
+\midrule
+Default ($c_{\max}{=}6$, $z{=}3$) & 98.6 & 1.00 & \textbf{0.00} \\
+\midrule
+$c_{\max}=3$ & 98.6 & 1.00 & 0.02 \\
+$c_{\max}=9$ & 98.6 & 1.00 & \textbf{0.00} \\
+$z=2.5$ & 98.6 & 1.00 & 0.06 \\
+$z=3.5$ & 98.6 & 1.00 & \textbf{0.00} \\
+\bottomrule
+\end{tabular}
+\end{table}

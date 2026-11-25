@@ -1,0 +1,25 @@
+\begin{table*}[t]
+\centering
+\caption{Comparison with existing defenses under 40\% label-flipping clients (mean$\pm$std over three seeds).}
+\label{tab:main}
+\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}l ccccc c cc@{}}
+\toprule
+& \multicolumn{5}{c}{\textbf{CIFAR-10, non-IID} ($\alpha_D{=}1$)} & \textbf{CIFAR-10} & \multicolumn{2}{c}{\textbf{MNIST}} \\
+\cmidrule(lr){2-6}\cmidrule(lr){7-7}\cmidrule(lr){8-9}
+\textbf{Method} & Acc.\,(\%)\,$\uparrow$ & ASR\,(\%)\,$\downarrow$ & Prec.\,$\uparrow$ & Rec.\,$\uparrow$ & FPR\,$\downarrow$ & IID Acc. & non-IID Acc. & IID Acc. \\
+\midrule
+FedAvg & 44.2{\scriptsize$\pm$0.5} & 32.8 & n/a & n/a & n/a & 42.1{\scriptsize$\pm$0.1} & 49.8{\scriptsize$\pm$0.3} & 49.6{\scriptsize$\pm$0.1} \\
+Median & 57.9{\scriptsize$\pm$4.2} & 16.7 & n/a & n/a & n/a & 62.9{\scriptsize$\pm$1.4} & -- & -- \\
+Multi-Krum & 60.8{\scriptsize$\pm$15.8} & 12.5 & 0.60 & 0.75 & 0.33 & 72.9{\scriptsize$\pm$0.3} & -- & -- \\
+FLAME & 56.9{\scriptsize$\pm$7.7} & 17.7 & 0.49 & 0.42 & 0.17 & 71.1{\scriptsize$\pm$0.4} & -- & -- \\
+LFighter & 59.0{\scriptsize$\pm$13.3} & 15.2 & 0.71 & 0.46 & 0.08 & 73.2{\scriptsize$\pm$0.3} & 98.5{\scriptsize$\pm$0.2} & \textbf{98.7}{\scriptsize$\pm$0.1} \\
+FLTrust (reference)$^{\dagger}$ & 69.2{\scriptsize$\pm$1.1} & 5.2 & 0.60 & 0.92 & 0.44 & 63.1{\scriptsize$\pm$0.3} & 97.2{\scriptsize$\pm$0.1} & 97.5{\scriptsize$\pm$0.1} \\
+FLTrust (BN-safe)$^{\dagger}$ & 57.8{\scriptsize$\pm$1.2} & 15.1 & 0.23 & 0.29 & 0.33 & 63.9{\scriptsize$\pm$2.3} & -- & -- \\
+\midrule
+\textbf{AntiFLipper} & \textbf{72.0}{\scriptsize$\pm$0.6} & \textbf{3.2} & \textbf{1.00} & \textbf{1.00} & \textbf{0.00} & \textbf{73.3}{\scriptsize$\pm$0.4} & \textbf{98.7}{\scriptsize$\pm$0.1} & \textbf{98.7}{\scriptsize$\pm$0.2} \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize $^{\dagger}$Uses a 100-sample clean root dataset at the server. Reference: rescales all tensors including BatchNorm statistics; BN-safe: trainable parameters only.}
+\end{table*}

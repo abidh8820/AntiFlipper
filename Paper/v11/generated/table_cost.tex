@@ -1,0 +1,23 @@
+\begin{table}[t]
+\centering
+\caption{Cost per round on CIFAR-10 (ResNet-18, 20 clients).}
+\label{tab:cost}
+\footnotesize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}l ccccc@{}}
+\toprule
+& \textbf{Server} & \multicolumn{2}{c}{\textbf{Server time (ms)}} & \textbf{Client} & \textbf{Report} \\
+\cmidrule(lr){3-4}
+\textbf{Method} & \textbf{data} & matched & in training & \textbf{overhead} & \textbf{payload} \\
+\midrule
+FedAvg & \ding{55} & 183 & 34 & 0 & 0 \\
+Multi-Krum & \ding{55} & 4109 & 875 & 0 & 0 \\
+FLAME & \ding{55} & 3465 & 1058 & 0 & 0 \\
+LFighter & \ding{55} & 214 & 42 & 0 & 0 \\
+FLTrust$^{\dagger}$ & \ding{51} & 1269 & 352 + 115 & 0 & 0 \\
+\midrule
+\textbf{AntiFLipper} & \ding{55} & 173 & 30 & 6.8\% & 84\,B \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize Matched: identical 20 updates on one CPU (Intel i7-8700, 6 threads, PyTorch 2.8), mean of 5 timed iterations after one warm-up; standard deviation 8\,ms for AntiFLipper and 25\,ms for FedAvg. In training: measured per round on an RTX 3090 GPU; excluded clients are not averaged. FLTrust: aggregation + root training.}
+\end{table}

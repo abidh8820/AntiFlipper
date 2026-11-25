@@ -1,0 +1,89 @@
+% AntiFLipper overview (one round). Included by AntiFlipper_v10.tex.
+% Needs: \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,shapes.symbols}
+% Grid: client lanes at x = 1.0 / 2.5 / 4.0; module bars start at x = 0.45;
+%       M2/M5 end at x = 5.9; M4 occupies x = 6.45..8.25; M6 spans 0.45..8.25.
+\definecolor{repc}{RGB}{38,99,170}\definecolor{repf}{RGB}{226,236,250}
+\definecolor{updc}{RGB}{204,110,20}\definecolor{updf}{RGB}{253,237,219}
+\definecolor{okc}{RGB}{22,150,100}\definecolor{badc}{RGB}{214,48,49}
+\definecolor{barf}{RGB}{222,222,222}
+\begin{tikzpicture}[
+  font=\sffamily\small, >={Stealth[length=5pt,width=4pt]}, line cap=round,
+  bar/.style={rounded corners=5pt, fill=barf, minimum height=0.62cm, align=center, inner sep=2pt},
+  tok/.style={circle, minimum size=0.62cm, inner sep=0pt, font=\sffamily\footnotesize\bfseries},
+  dia/.style={diamond, aspect=1, minimum size=0.82cm, inner sep=0pt, rounded corners=3pt, font=\sffamily\footnotesize\bfseries},
+  group/.style={draw=black!45, dotted, line width=0.7pt, rounded corners=6pt},
+  lbl/.style={font=\sffamily\scriptsize, align=left, text=black!75, anchor=west},
+  w/.style={line width=0.9pt},
+]
+% ---------------------------------------------------------------- lanes and fixed columns
+\def\xa{1.0}\def\xb{2.5}\def\xc{4.0}
+\def\xl{4.6}   % left edge of the side labels
+\def\xm{7.35}  % centre of M4
+\def\ybus{0.95}
+% ---------------------------------------------------------------- server frame (label sits on the frame line)
+\draw[dashed, line width=0.8pt, rounded corners=9pt, black!70] (0.15,1.3) rectangle (8.55,7.05);
+\node[font=\sffamily\small\bfseries, fill=white, inner sep=3pt, anchor=west] at (0.4,7.05) {Server};
+% ---------------------------------------------------------------- clients (device card with a local data store)
+\foreach \x/\n/\name/\col in {\xa/a/Client 1/black, \xb/b/Client 2/black, \xc/c/Attacker/badc}{
+  \node[draw=\col, line width=1.1pt, rounded corners=4pt, minimum width=1.32cm, minimum height=0.95cm, fill=white] (cl\n) at (\x,0) {};
+  \begin{scope}[shift={(\x-0.36,0.04)}, \col, line width=0.7pt]
+    \draw[fill=white] (-0.16,0.16) -- (-0.16,-0.14) arc[start angle=180, end angle=360, x radius=0.16, y radius=0.055] -- (0.16,0.16);
+    \draw[fill=white] (0,0.16) ellipse[x radius=0.16, y radius=0.055];
+    \draw[line width=0.5pt] (-0.16,0.01) arc[start angle=180, end angle=360, x radius=0.16, y radius=0.055];
+  \end{scope}
+  \node[font=\sffamily\scriptsize, text=\col] at (\x+0.2,0.06) {$m_j$};
+  \node[font=\sffamily\tiny, text=\col] at (\x,-0.33) {\name};
+}
+\node[font=\sffamily\tiny, text=badc, align=center, anchor=west] at (\xc+0.72,0.0) {flips\\labels};
+% ---------------------------------------------------------------- M1: received reports
+\node[group, minimum width=3.9cm, minimum height=0.95cm] at (\xb,2.05) {};
+\foreach \x/\n/\c in {\xa/a/repc, \xb/b/repc, \xc/c/badc}
+  \node[tok, fill=repf, draw=\c, line width=1.1pt] (r\n) at (\x,2.05) {M1};
+\node[lbl] at (\xl,2.05) {Per-class\\reports (84\,B)};
+% ---------------------------------------------------------------- M2
+\node[bar, minimum width=5.45cm] (m2) at (3.175,3.1) {\textbf{M2:} Class-conditional residual \ $r_j$};
+% ---------------------------------------------------------------- M3: per-client trust
+\node[group, minimum width=3.9cm, minimum height=1.15cm] at (\xb,4.15) {};
+\node[dia, fill=okc, text=white] (ta) at (\xa,4.15) {M3};
+\node[dia, fill=okc, text=white] (tb) at (\xb,4.15) {M3};
+\node[dia, fill=white, draw=badc, line width=1.1pt, text=badc] (tc) at (\xc,4.15) {M3};
+\node[lbl] at (\xl,4.15) {Trust\\update $\tau_j$};
+% ---------------------------------------------------------------- M5, M6
+\node[bar, minimum width=5.45cm] (m5) at (3.175,5.15) {\textbf{M5:} Flags \& capped exclusion};
+\node[bar, minimum width=7.8cm]  (m6) at (4.35,6.2)  {\textbf{M6:} Trust-weighted aggregation \ $\sum_{j\notin\beta}\tau_j m_j$};
+% ---------------------------------------------------------------- M4 (update path): box with three stacked parts
+\node[rounded corners=5pt, fill=updf, draw=updc, line width=0.9pt, minimum width=1.8cm, minimum height=3.9cm] (m4) at (\xm,3.55) {};
+\node[align=center, anchor=north, inner sep=0pt] at ($(m4.north)+(0,-0.18)$) {\textbf{M4:}\\Update\\consistency\\check};
+\draw[updc!60, line width=0.5pt] ($(m4.center)+(-0.6,0.1)$) -- ($(m4.center)+(0.6,0.1)$);
+\node[font=\footnotesize] at ($(m4.center)+(0,-0.5)$) {$\cos(\delta_j,\tilde\delta)$};
+\node[font=\sffamily\scriptsize, align=center, text=black!75] at ($(m4.center)+(0,-1.3)$) {last layer\\vs.\ median};
+% ---------------------------------------------------------------- update bus (orange), clients -> M4
+\foreach \n in {a,b,c}
+  \draw[w, updc] ($(cl\n.north)+(0.42,0)$) -- ($(cl\n.north)+(0.42,\ybus-0.475)$);
+\draw[w, updc, ->] ($(\xa+0.42,\ybus)$) -- (\xm,\ybus) -- (m4.south);
+\node[font=\sffamily\scriptsize, text=updc, anchor=north] at (6.3,\ybus-0.04) {updates $m_j$};
+% ---------------------------------------------------------------- report arrows (blue), centred on each M1, bridging the bus
+\foreach \n/\c in {a/repc, b/repc, c/badc}
+  \draw[w, \c, ->, preaction={draw=white, line width=3.4pt, shorten <=2pt, shorten >=2pt}] (cl\n.north) -- (r\n.south);
+% ---------------------------------------------------------------- vertical flow through the modules
+\foreach \n/\c in {a/black, b/black, c/badc}{
+  \draw[w, \c, ->] (r\n.north) -- (r\n.north |- m2.south);
+  \draw[w, \c, ->] (t\n.south |- m2.north) -- (t\n.south);
+  \draw[w, \c, ->] (t\n.north) -- (t\n.north |- m5.south);
+}
+\foreach \x in {\xa,\xb}
+  \draw[w, ->] (\x,5.46) -- (\x,5.89);
+\draw[w, badc, dashed] (\xc,5.46) -- (\xc,5.6);
+\node[circle, fill=badc, text=white, inner sep=0.6pt, font=\sffamily\tiny\bfseries] at (\xc,5.69) {$\times$};
+\node[font=\sffamily\scriptsize, text=badc, anchor=west] at (\xc+0.18,5.69) {excluded};
+% ---------------------------------------------------------------- M4 outputs
+\draw[w, updc, ->] (m4.west |- m5) -- node[above, font=\sffamily\scriptsize, text=updc] {flag} (m5.east);
+\draw[w, updc, ->] (m4.north) -- (m4.north |- m6.south);
+% ---------------------------------------------------------------- global model and broadcast
+\node[cloud, cloud puffs=11, cloud puff arc=110, aspect=2.2, draw=black!75, line width=0.9pt, fill=white,
+      minimum width=2.3cm, minimum height=0.95cm, font=\sffamily\footnotesize, align=center] (gm) at (4.35,7.95) {Global model\\$M_{t+1}$};
+\draw[w, ->] (m6.north) -- (gm.south);
+\draw[w, ->] (gm.west) -- (-0.45,7.95) -- (-0.45,-0.95) -- (\xc,-0.95) -- (clc.south);
+\foreach \n in {a,b} \draw[w, ->] (cl\n.south |- 0,-0.95) -- (cl\n.south);
+\node[font=\sffamily\scriptsize, rotate=90, anchor=south] at (-0.45,3.4) {broadcast to active clients};
+\end{tikzpicture}

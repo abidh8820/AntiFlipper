@@ -1,0 +1,21 @@
+\begin{table}[t]
+\centering
+\caption{Strong skew with attackers (CIFAR-10, $\alpha_D{=}0.1$, 40\% full flips, honest reports).}
+\label{tab:skew}
+\footnotesize
+\setlength{\tabcolsep}{3.6pt}
+\begin{tabular}{@{}l ccccc@{}}
+\toprule
+\textbf{Method} & Acc.\,(\%)\,$\uparrow$ & ASR\,$\downarrow$ & Rec. & FPR & All found \\
+\midrule
+FedAvg & 43.8{\scriptsize$\pm$9.1} & 18.7 & n/a & n/a & n/a \\
+FedAvg (weighted) & 44.8{\scriptsize$\pm$9.2} & 21.4 & n/a & n/a & n/a \\
+LFighter & 41.6{\scriptsize$\pm$11.5} & 19.0 & 0.21 & 0.28 & n/a \\
+FLTrust$^{\dagger}$ & 39.3{\scriptsize$\pm$6.5} & 16.0 & 0.58 & 0.53 & n/a \\
+\midrule
+Raw reports & 13.0{\scriptsize$\pm$2.6} & 15.8 & 0.88 & 0.94 & 0/3 \\
+\textbf{AntiFLipper} & \textbf{49.1}{\scriptsize$\pm$11.9} & \textbf{7.5} & \textbf{0.96} & \textbf{0.00} & 2/3 (70) \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize FedAvg: equal client weights; weighted: by dataset size, as in~\cite{fedavg-pmlr-v54-mcmahan17a}. All found: seeds in which every attacker was excluded (mean round).}
+\end{table}

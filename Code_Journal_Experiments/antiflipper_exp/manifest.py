@@ -9,7 +9,7 @@ from .config import CC_V2, ExperimentConfig
 
 
 SEEDS = (7, 19, 31)
-PROFILES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix", "rev", "rev2")
+PROFILES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix", "rev", "rev2", "rev3")
 # Held out from every reported comparison; used only for hyperparameter sensitivity.
 SENSITIVITY_SEEDS = (101, 113, 127)
 
@@ -254,6 +254,30 @@ def rev2_jobs() -> list[ExperimentConfig]:
     return _dedupe(jobs)
 
 
+LFIGHTER = {"method": "lfighter"}
+FLTRUST_BN = {"method": "fltrust", "notes": "bn-safe"}  # same BN-safe aggregator as fltrust_fix
+
+
+def rev3_jobs() -> list[ExperimentConfig]:
+    """Partial attacks for the baselines, and partial participation (2026-11-25).
+
+    Partial flips (50%, 25%) for LFighter and FLTrust; AntiFLipper and FedAvg already have
+    them (rev, rev2). Partial participation (half the clients sampled per round) at the
+    headline setting for AntiFLipper, LFighter, FLTrust and FedAvg. Seed-major, and the
+    cheaper participation runs first in each seed."""
+    def job(seed, experiment, variant, **overrides):
+        return replace(base("CIFAR10", "NON_IID", variant["method"], seed, experiment), tags=("REV3",),
+                       **{**{k: v for k, v in variant.items() if k != "method"}, **overrides})
+
+    jobs: list[ExperimentConfig] = []
+    for seed in SEEDS:
+        for variant in (FLTRUST_BN, CR_CC, LFIGHTER, FEDAVG):
+            jobs.append(job(seed, "A10_partial_participation", variant, participation=0.5))
+        for fraction, variant in itertools.product((0.5, 0.25), (FLTRUST_BN, LFIGHTER)):
+            jobs.append(job(seed, "A4_partial_flip", variant, label_poison_fraction=fraction))
+    return _dedupe(jobs)
+
+
 def build(profile: str) -> list[ExperimentConfig]:
     if profile == "smoke":
         return smoke_jobs()
@@ -265,6 +289,8 @@ def build(profile: str) -> list[ExperimentConfig]:
         return rev_jobs()
     if profile == "rev2":
         return rev2_jobs()
+    if profile == "rev3":
+        return rev3_jobs()
     if profile not in PROFILES:
         raise ValueError(f"Unknown profile: {profile}")
     reference = core_jobs()

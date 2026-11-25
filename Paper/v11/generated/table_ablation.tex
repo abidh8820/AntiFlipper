@@ -1,0 +1,27 @@
+\begin{table*}[t]
+\centering
+\caption{Ablation on CIFAR-10: AntiFLipper with components removed (mean over three seeds).}
+\label{tab:ablation}
+\footnotesize
+\setlength{\tabcolsep}{3.6pt}
+\begin{tabular}{@{}l ccc cc ccc ccc cc@{}}
+\toprule
+& & & & \multicolumn{2}{c}{\textbf{40\% attack}} & \multicolumn{3}{c}{\textbf{40\% report faking}} & \multicolumn{3}{c}{\textbf{No attack}} & \multicolumn{2}{c}{\textbf{40\% attack}} \\
+& & & & \multicolumn{2}{c}{$\alpha_D{=}1$} & \multicolumn{3}{c}{$\alpha_D{=}1$} & \multicolumn{3}{c}{$\alpha_D{=}0.1$} & \multicolumn{2}{c}{$\alpha_D{=}0.1$} \\
+\cmidrule(lr){5-6}\cmidrule(lr){7-9}\cmidrule(lr){10-12}\cmidrule(lr){13-14}
+\textbf{Variant} & CR & CC & Cap & Acc. & FPR & Acc. & Rec. & FPR & Acc.\,(last 10) & Acc.\,(final) & Excl.\,$\downarrow$ & Acc. & Rec. \\
+\midrule
+FedAvg & -- & -- & -- & 44.2 & n/a & 44.2 & n/a & n/a & 57.6{\scriptsize$\pm$9.4} & 51.9{\scriptsize$\pm$22.6} & n/a & 43.8 & n/a \\
+FedAvg (sample-weighted) & -- & -- & -- & -- & n/a & -- & n/a & n/a & 59.7{\scriptsize$\pm$10.5} & 62.2{\scriptsize$\pm$7.2} & n/a & 44.8 & n/a \\
+\midrule
+Raw reports & \ding{55} & \ding{55} & \ding{55} & 71.0 & 0.08 & 72.4 & 0.67 & 0.08 & 16.3{\scriptsize$\pm$5.9} & 16.9{\scriptsize$\pm$5.7} & 18.3 & 13.0 & 0.88 \\
+Raw reports + cap & \ding{55} & \ding{55} & \ding{51} & -- & -- & -- & -- & -- & 16.8{\scriptsize$\pm$6.4} & 16.7{\scriptsize$\pm$6.1} & 8.0 & 12.5 & 0.38 \\
+Raw reports + CC & \ding{55} & \ding{51} & \ding{55} & 70.4 & 0.25 & 71.6 & 0.88 & 0.17 & 31.2{\scriptsize$\pm$15.2} & 31.4{\scriptsize$\pm$15.0} & 17.0 & 28.9 & \textbf{0.96} \\
+CC only$^{\ddagger}$ & -- & \ding{51} & \ding{51} & \textbf{72.2} & \textbf{0.00} & 72.2 & \textbf{1.00} & \textbf{0.00} & 55.2{\scriptsize$\pm$7.8} & 52.0{\scriptsize$\pm$22.7} & 0.3 & 44.6 & 0.04 \\
+CR + cap (no CC) & \ding{51} & \ding{55} & \ding{51} & 70.7 & \textbf{0.00} & \textbf{73.5} & 0.62 & \textbf{0.00} & \textbf{60.2}{\scriptsize$\pm$7.5} & \textbf{63.3}{\scriptsize$\pm$7.0} & 0.3 & \textbf{49.1} & \textbf{0.96} \\
+\midrule
+\textbf{AntiFLipper} & \ding{51} & \ding{51} & \ding{51} & 72.0 & \textbf{0.00} & 72.0 & \textbf{1.00} & \textbf{0.00} & 54.3{\scriptsize$\pm$9.8} & 46.1{\scriptsize$\pm$31.1} & \textbf{0.0} & \textbf{49.1} & \textbf{0.96} \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize Acc.: last-10-round mean unless marked. Excl.: honest clients excluded (of 20). FedAvg rows: no defense, for reference; the sample-weighted one weights clients by dataset size and was run only at $\alpha_D{=}0.1$. --: not run. CC uses $z{=}2.5$ in ``Raw reports + CC'' and $z{=}3$ elsewhere. $^{\ddagger}$Uniform trust; it ignores reports, so faking has no effect.}
+\end{table*}
