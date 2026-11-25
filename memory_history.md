@@ -317,3 +317,42 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - Title fits on two lines now at 21pt with standard IEEEtran margins. v8 fit at 24pt only because it used custom narrow margins (0.65/0.59 in).
 - Affiliation fix: authors 4, 5 and 6 (Bappy, Tahrim Hossain, Tariqul Islam) are at UMBC, not Syracuse. Fixed in v10; older versions left unchanged.
 - 08:05: 55/69 done; P2 complete, only P3 MNIST left (~09:45). Partial flips (full method, 3 seeds): flip 0.5 gives acc 71.3, recall 1, FPR 0, detection at round ~21.5; flip 0.25 gives acc 72.1, recall 1, FPR 0, round ~35.6 (full flip: round 15). There is no baseline under partial flips.
+- 09:57: 63/69 done, 0 failed. MNIST sensitivity jobs take ~50 min (200 rounds), not 20, so all should be done ~11:20. The auto-pull watcher was restarted after the previous one stopped with the session.
+- Contribution check on the P1/P2 results (3 seeds each):
+  - Matched CC-only: headline 72.2±0.4 (ours 72.0); attack α0.1 44.6, recall ~0.04 (ours 49.1, recall 0.96).
+  - Clean α0.1: FedAvg 57.6±7.7 (ours 54.3±9.8, CR-only 60.2). FedAvg at α0.5 is 65.0 and at α1 75.1.
+  - Verdict given to the user: the contribution is real but narrow. The two parts cover each other's failure modes (CR covers skew, CC covers faking at α=1) and only the full method handles both; the residual matches FedAvg's utility rather than beating it. Faking at α0.1 is unsolved.
+- Paper rewrite per the user's 7 comments (v10, 8 pages, not committed):
+  - Abstract now opens with label flipping.
+  - The intro was rewritten as a story, with the two weaknesses in plain words.
+  - The technical failure modes moved to an expanded Related Work section (5 paragraphs plus "Where accuracy feedback fails"), and the threat model now comes after Related Work.
+  - The Results section is ordered as a narrative.
+  - New table "Attackers that try to stay hidden" (partial flips, faking at α1 and α0.1).
+  - The ablation now has a FedAvg row and matched CC-only (z3 + cap).
+  - The heterogeneity figure adds a FedAvg line, and the sensitivity table is now the full method (A9).
+  - Fig. 1 was redrawn single-column in the original sys_arc style.
+  - All 14 floats/props are referenced. Verbatim overlap with v6/v8 is 1.2% (title and authors only).
+- Pending: rerun make_results.py + latexmk once rev reaches 69/69 (66 at 10:33).
+- 11:2x: rev finished 69/69 with 0 failed; the service is inactive and the GPU is free. Results copied; tables regenerated (402 runs loaded, nRuns 384); paper rebuilt at 8 pages. Full-method sensitivity FPR is at most 0.09 in a single run.
+
+## 2026-11-25 (status check)
+- Confirmed no AntiFLipper jobs running on NDAG (rev service inactive); GPU busy only with other projects.
+- Re-recommended optional experiments: partial participation (headline setting) and report faking at alpha=0.5. Still awaiting user approval.
+- Fig. 1 cleanup: report arrows centred on M1, all bars share left edge, M2/M5 no longer touch the frame, M4 text restructured (Update consistency check / cos / last layer vs. median, matching the paper's name), "no reference data" removed, "Server" label set into the frame line. Paper rebuilt, 8 pages.
+- User asked why there is no 30% run. Answer: A3 has 10/20/30% (3 seeds; FedAvg, LFighter, FLTrust, FLTrust-bnsafe, raw, CC, CR, CR+CC) and is shown in Fig. ratio plus text. Median, Multi-Krum and FLAME were not run below 40%. Added a sentence in Setup justifying 40% as the default (largest share in the threat model, hardest case).
+- External-style review (weak reject, 4/5) received. Verified every code claim: FedAvg is equal-weight (aggregators.py:296); Dirichlet split is per class across clients (data.py:74); partial-flip subset is redrawn each round (engine.py:127, seed includes round); residual pools including the scored client (engine.py:341).
+- Wording fixes done (no runs): abstract/conclusion scope the accuracy claim to full flip + honest reporting at alpha=1; threat model partial-flip description; M2 conditional + absent classes; analysis self-inclusion; MAD epsilon in M4/Alg. 1; Setup split description + client sizes (143-10,704 at 0.1); FedAvg defined as equal-weight + limitation; Fig. 3 seed 19 stated; residual AUC from logs (0.73-0.91 at alpha 1, 0.56-0.65 at 0.1); Table IV adds CR-only/CC-only faking alpha 0.1 rows; cost footnote with i7-8700/6 threads/5 iters/std; README rewritten. Paper 8 pages.
+- Open (not approved): sample-weighted FedAvg at alpha 0.1 (6 jobs + code), FedAvg partial flips (6 jobs).
+
+## 2026-11-25 14:10 (rev2 launched)
+- User approved the review controls and said SPARCFL (the user's own code on NDAG) may be paused and resumed.
+- Code: new method `fedavg_weighted` (sample-count weights; aggregators.py + engine.py passes client sizes), new profile `rev2` (12 CIFAR-10 jobs: fedavg_weighted clean + attacked at alpha 0.1, and fedavg with partial flips 0.5/0.25; 3 seeds). Copied the 4 changed files to NDAG by scp (NDAG code was clean at 596cd7e; originals backed up to ~/af_backup_rev2). Not committed locally.
+- SPARCFL pause: only the top-level runner (pid 411313) was SIGSTOPped, so the running STD segment-timing benchmark (wall-clock per round) finishes undisturbed and no new SPARCFL job starts. NDAG-side watcher ~/af_rev2_handoff.sh (log ~/af_rev2_handoff.log): waits for the STD child to exit, starts antiflipper-rev2.service (4 workers, not enabled at boot), then sends SIGCONT to 411313 when the service ends.
+- If rev2 crash-loops, SPARCFL stays frozen: check the service and `kill -CONT 411313` manually.
+- pull_results.sh now includes rev2; make_results.py loads rev2 and has macros fedW* / pfAccFedAvg* (dashes until runs exist). The paper text does not use them yet.
+- Follow-up review ("borderline, weak reject"): fixed wording. Abstract and limitations say faking at alpha 0.1 is caught for 1 of 24 attackers (macros fsFound/fsTotal); conclusion gives 18.3 -> 0 honest exclusions in clean CIFAR-10 alpha 0.1 runs instead of "removes"; residual-AUC paragraph states the filter (active, not CC-marked, per round, first 10 rounds) and says "consistent with"; ablation "prevents ... in our runs". Waiting for rev2 to address the remaining point (sample-weighted FedAvg).
+
+## 2026-11-25 (16:35 status check)
+- rev2: batch 1 done (fedavg_weighted α0.1 clean+attacked, s7/s19; ~118 min per batch). Batch 2 (s31 weighted + partial-flip FedAvg s7) started 16:24; batch 3 expected to finish ~20:20.
+- Preliminary (2 seeds): weighted FedAvg clean α0.1 48.1/62.7 (AntiFLipper 3-seed mean 54.3); attacked 40.4/55.4 (AntiFLipper 49.1±11.9). Close; wait for s31.
+- SPARCFL runner 411313 still frozen (T); watcher resumes it when rev2 ends.

@@ -1,0 +1,25 @@
+\begin{table}[t]
+\centering
+\caption{Attackers that try to stay hidden (CIFAR-10, 40\% attackers).}
+\label{tab:adaptive}
+\footnotesize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}l c c cccc@{}}
+\toprule
+& & \textbf{FedAvg} & \multicolumn{4}{c}{\textbf{AntiFLipper}} \\
+\cmidrule(lr){3-3}\cmidrule(lr){4-7}
+\textbf{Attack} & $\alpha_D$ & Acc. & Acc.\,(\%) & Rec. & FPR & All found \\
+\midrule
+Full flip (Table~\ref{tab:main}) & 1 & 44.2 & 72.0{\scriptsize$\pm$0.6} & 1.00 & 0.00 & 3/3 (15) \\
+\midrule
+Partial flip, 50\% & 1 & -- & 71.3{\scriptsize$\pm$0.4} & 1.00 & 0.00 & 3/3 (24) \\
+Partial flip, 25\% & 1 & -- & 72.1{\scriptsize$\pm$0.5} & 1.00 & 0.00 & 3/3 (39) \\
+\midrule
+Report faking & 1 & 44.2 & 72.0{\scriptsize$\pm$0.3} & 1.00 & 0.00 & 3/3 (13) \\
+Report faking & 0.1 & 43.8 & 43.1{\scriptsize$\pm$9.8} & 0.04 & 0.06 & 0/3 \\
+\quad residual only$^{*}$ & 0.1 & -- & 44.5{\scriptsize$\pm$7.4} & 0.00 & 0.00 & 0/3 \\
+\quad consistency only$^{\ddagger}$ & 0.1 & -- & 44.6{\scriptsize$\pm$7.6} & 0.04 & 0.03 & 0/3 \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize Partial flip: share of each attacker's samples relabelled, a fresh random subset in every round. FedAvg ignores reports, so its faking rows equal the honest-reporting runs; $^{*}$AntiFLipper without the consistency check. $^{\ddagger}$Consistency check alone with uniform trust; it ignores reports, so its row is the honest-reporting run. All found: seeds in which every attacker was excluded (mean round).}
+\end{table}

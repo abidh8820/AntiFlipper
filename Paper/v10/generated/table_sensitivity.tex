@@ -1,6 +1,6 @@
 \begin{table}[t]
 \centering
-\caption{Sensitivity of the trust, flag and consistency parameters (raw reports + CC, MNIST non-IID).}
+\caption{Parameter sensitivity of AntiFLipper (MNIST non-IID, held-out seeds).}
 \label{tab:sensitivity}
 \footnotesize
 \setlength{\tabcolsep}{5pt}
@@ -10,14 +10,12 @@
 \cmidrule(lr){2-3}\cmidrule(lr){4-4}
 \textbf{Setting} & Acc.\,(\%) & Rec. & FPR \\
 \midrule
-Default ($\rho{=}0.05$, $c_{\max}{=}6$, $z{=}2.5$) & 98.6 & 1.00 & 0.13 \\
+Default ($c_{\max}{=}6$, $z{=}3$) & 98.6 & 1.00 & \textbf{0.00} \\
 \midrule
-$\rho=0.025$ & 98.6 & 1.00 & 0.13 \\
-$\rho=0.1$ & 98.6 & 1.00 & 0.13 \\
-$c_{\max}=3$ & 98.5 & 1.00 & 0.32 \\
-$c_{\max}=9$ & 98.6 & 1.00 & 0.09 \\
-$z=2.0$ & 98.5 & 1.00 & 0.47 \\
-$z=3.0$ & 98.6 & 1.00 & \textbf{0.05} \\
+$c_{\max}=3$ & 98.6 & 1.00 & 0.02 \\
+$c_{\max}=9$ & 98.6 & 1.00 & \textbf{0.00} \\
+$z=2.5$ & 98.6 & 1.00 & 0.06 \\
+$z=3.5$ & 98.6 & 1.00 & \textbf{0.00} \\
 \bottomrule
 \end{tabular}
 \end{table}

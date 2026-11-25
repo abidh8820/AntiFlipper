@@ -597,7 +597,9 @@ def run_experiment(
             new_state, method_weights = aggregate(
                 cfg.method, [x.state for x in admitted], global_cpu, [x.client_id for x in admitted],
                 cfg.malicious_client_fraction, aggregator_state,
-                trust_weights=[trust[x.client_id] for x in admitted] if cfg.method in ANTIFLIPPER_METHODS else None,
+                trust_weights=([trust[x.client_id] for x in admitted] if cfg.method in ANTIFLIPPER_METHODS
+                               else [len(data.clients[x.client_id]) for x in admitted] if cfg.method == "fedavg_weighted"
+                               else None),
                 root_state=root_state, seed=cfg.seed + round_index, parameter_keys=parameter_keys,
             )
             if device.type == "cuda": torch.cuda.synchronize()

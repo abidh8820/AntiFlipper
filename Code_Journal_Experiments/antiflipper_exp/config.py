@@ -27,7 +27,7 @@ REPORT_METHODS = {"antiflipper", "antiflipper_cc", CC_V2} | CR_METHODS
 REPORT_REPLACEMENT_METHODS = {"antiflipper_cc", "antiflipper_cr_cc"}
 # Threat model: at most 40% of clients are malicious.
 MAX_MALICIOUS_FRACTION = 0.4
-KNOWN_METHODS = ANTIFLIPPER_METHODS | {"fedavg", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust"}
+KNOWN_METHODS = ANTIFLIPPER_METHODS | {"fedavg", "fedavg_weighted", "median", "trimmed_mean", "foolsgold", "tolpegin", "multi_krum", "flame", "lfighter", "fltrust"}
 
 # Fields added after the first experiments were run. They are omitted from the
 # canonical form (and therefore from the config hash / job id) while they hold

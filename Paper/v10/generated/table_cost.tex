@@ -19,5 +19,5 @@ FLTrust$^{\dagger}$ & \ding{51} & 1269 & 352 + 115 & 0 & 0 \\
 \textbf{AntiFLipper} & \ding{55} & 173 & 30 & 6.8\% & 84\,B \\
 \bottomrule
 \end{tabular}
-\\[2pt]\parbox{\linewidth}{\scriptsize Matched: identical 20 updates on CPU. In training: measured per round; excluded clients are not averaged. FLTrust: aggregation + root training.}
+\\[2pt]\parbox{\linewidth}{\scriptsize Matched: identical 20 updates on one CPU (Intel i7-8700, 6 threads, PyTorch 2.8), mean of 5 timed iterations after one warm-up; standard deviation 8\,ms for AntiFLipper and 25\,ms for FedAvg. In training: measured per round on an RTX 3090 GPU; excluded clients are not averaged. FLTrust: aggregation + root training.}
 \end{table}

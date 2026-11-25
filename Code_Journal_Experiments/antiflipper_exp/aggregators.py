@@ -295,6 +295,9 @@ def aggregate(
     n = len(states)
     if method == "fedavg":
         weights = np.ones(n); return weighted_average(states, weights), weights
+    if method == "fedavg_weighted":
+        # Original FedAvg (McMahan et al.): weight each client by its local sample count.
+        weights = np.asarray(trust_weights, dtype=float); return weighted_average(states, weights), weights
     if method in ANTIFLIPPER_METHODS:
         weights = np.asarray(trust_weights, dtype=float); return weighted_average(states, weights), weights
     if method == "median":

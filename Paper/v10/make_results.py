@@ -25,20 +25,21 @@ OUT = HERE / "generated"
 FIG = HERE / "fig"
 RESULT_ROOTS = (
     REPO / "Results_Backup_2026-11-24_NDAG" / "repo" / "AntiFlipper" / "Code_Journal_Experiments" / "results",
+    REPO / "Results_Backup_2026-11-23" / "results",
     REPO / "Code_Journal_Experiments" / "results",
 )
 TIMING_TAGS = REPO / "Results_Backup_2026-11-23" / "round_timing_tagged.csv"
-PROFILES = ("core", "cr", "fltrust_fix")
+PROFILES = ("core", "cr", "fltrust_fix", "rev", "rev2")
 DASH = "--"
 
 PROPOSED = "antiflipper_cr_cc"
 NAMES = {
-    "fedavg": "FedAvg", "median": "Median", "multi_krum": "Multi-Krum", "flame": "FLAME",
+    "fedavg": "FedAvg", "fedavg_weighted": "FedAvg (sample-weighted)", "median": "Median", "multi_krum": "Multi-Krum", "flame": "FLAME",
     "lfighter": "LFighter", "fltrust": r"FLTrust (reference)$^{\dagger}$",
     "fltrust_bnsafe": r"FLTrust (BN-safe)$^{\dagger}$",
     "antiflipper": "Raw reports", "antiflipper_budget": "Raw reports + cap",
     "antiflipper_cc": "Raw reports + CC", "antiflipper_cc_z3": "Raw reports + CC ($z{=}3$)",
-    "cc_only": r"CC only$^{\ddagger}$", "antiflipper_cr": "CR + cap (no CC)",
+    "cc_only": r"CC only$^{\ddagger}$", "cc_only_m": r"CC only$^{\ddagger}$", "antiflipper_cr": "CR + cap (no CC)",
     PROPOSED: r"\textbf{AntiFLipper}",
 }
 PLAIN = {"fedavg": "FedAvg", "lfighter": "LFighter", "fltrust": "FLTrust", "antiflipper": "Raw reports",
@@ -67,6 +68,8 @@ def load_runs() -> list[dict]:
                     config["method"] = "antiflipper_budget"
                 elif config["method"] == "antiflipper_cc" and abs(config["consistency_z"] - 2.5) > 1e-9:
                     config["method"] = "antiflipper_cc_z3"
+                elif config["method"] == "cc_only" and config["max_exclusion_fraction"] < 1:
+                    config["method"] = "cc_only_m"  # matched to AntiFLipper: z=3 and the 0.4N cap
                 elif config["method"] == "fltrust" and config["notes"] == "bn-safe":
                     config["method"] = "fltrust_bnsafe"
                 run = {**config, **json.loads(summary_path.read_text(encoding="utf-8")),
@@ -156,7 +159,7 @@ def attacked_skew(runs, method):
 
 
 def adaptive(runs, method):
-    if method in ("lfighter", "fltrust", "fltrust_bnsafe", "cc_only", "fedavg"):
+    if method in ("lfighter", "fltrust", "fltrust_bnsafe", "cc_only", "cc_only_m", "fedavg"):
         return headline(runs, method)  # ignores reports: faking has no effect
     return select(runs, experiment="A7_adaptive_report", method=method)
 
@@ -256,33 +259,35 @@ def table_main(runs) -> None:
 
 
 def table_ablation(runs) -> None:
-    variants = [("antiflipper", r"\ding{55}", r"\ding{55}", r"\ding{55}"),
+    variants = [("fedavg", "--", "--", "--"),
+                ("antiflipper", r"\ding{55}", r"\ding{55}", r"\ding{55}"),
                 ("antiflipper_budget", r"\ding{55}", r"\ding{55}", r"\ding{51}"),
                 ("antiflipper_cc", r"\ding{55}", r"\ding{51}", r"\ding{55}"),
-                ("cc_only", "--", r"\ding{51}", r"\ding{55}"),
+                ("cc_only_m", "--", r"\ding{51}", r"\ding{51}"),
                 ("antiflipper_cr", r"\ding{51}", r"\ding{55}", r"\ding{51}"),
                 (PROPOSED, r"\ding{51}", r"\ding{51}", r"\ding{51}")]
     methods = [v[0] for v in variants]
+    det = lambda sets: [None if m == "fedavg" else rows for m, rows in zip(methods, sets)]
     main = [headline(runs, m) for m in methods]
     fake = [adaptive(runs, m) for m in methods]
     cln = [clean(runs, m, 0.1) for m in methods]
     skew = [attacked_skew(runs, m) for m in methods]
     columns = [
         (Column("last10_accuracy_mean", 100, 1), main),
-        (Column("final_fpr", 1, 2, best="min"), main),
+        (Column("final_fpr", 1, 2, best="min"), det(main)),
         (Column("last10_accuracy_mean", 100, 1), fake),
-        (Column("final_recall", 1, 2), fake),
-        (Column("final_fpr", 1, 2, best="min"), fake),
+        (Column("final_recall", 1, 2), det(fake)),
+        (Column("final_fpr", 1, 2, best="min"), det(fake)),
         (Column("last10_accuracy_mean", 100, 1, std=True), cln),
         (Column("final_accuracy", 100, 1, std=True), cln),
-        (Column("honest_excluded", 1, 1, best="min"), cln),
+        (Column("honest_excluded", 1, 1, best="min"), det(cln)),
         (Column("last10_accuracy_mean", 100, 1), skew),
-        (Column("final_recall", 1, 2), skew),
+        (Column("final_recall", 1, 2), det(skew)),
     ]
     labels = [f"{NAMES[m]} & {cr} & {cc} & {cap}" for m, cr, cc, cap in variants]
     lines = [
         r"\begin{table*}[t]", r"\centering",
-        r"\caption{Ablation on CIFAR-10: each component added to or removed from AntiFLipper (mean over three seeds).}",
+        r"\caption{Ablation on CIFAR-10: AntiFLipper with components removed (mean over three seeds).}",
         r"\label{tab:ablation}", r"\footnotesize", r"\setlength{\tabcolsep}{3.6pt}",
         r"\begin{tabular}{@{}l ccc cc ccc ccc cc@{}}", r"\toprule",
         r"& & & & \multicolumn{2}{c}{\textbf{40\% attack}} & \multicolumn{3}{c}{\textbf{40\% report faking}} & \multicolumn{3}{c}{\textbf{No attack}} & \multicolumn{2}{c}{\textbf{40\% attack}} \\",
@@ -291,9 +296,9 @@ def table_ablation(runs) -> None:
         r"\textbf{Variant} & CR & CC & Cap & Acc. & FPR & Acc. & Rec. & FPR & Acc.\,(last 10) & Acc.\,(final) & Excl.\,$\downarrow$ & Acc. & Rec. \\",
         r"\midrule",
     ]
-    lines += render(labels, columns, rule_after={len(methods) - 2})
+    lines += render(labels, columns, rule_after={0, len(methods) - 2})
     lines += [r"\bottomrule", r"\end{tabular}",
-              r"\\[2pt]\parbox{\linewidth}{\scriptsize Acc.: last-10-round mean unless marked. Excl.: honest clients excluded (of 20). CC uses $z{=}3$ in AntiFLipper and $z{=}2.5$ in the other variants. $^{\ddagger}$Uniform trust, no cap; it ignores reports, so faking has no effect.}", r"\end{table*}", ""]
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Acc.: last-10-round mean unless marked. Excl.: honest clients excluded (of 20). FedAvg: no defense, for reference. --: not run. CC uses $z{=}2.5$ in ``Raw reports + CC'' and $z{=}3$ elsewhere. $^{\ddagger}$Uniform trust; it ignores reports, so faking has no effect.}", r"\end{table*}", ""]
     write("table_ablation.tex", "\n".join(lines))
 
 
@@ -322,6 +327,50 @@ def table_skew(runs) -> None:
     write("table_skew.tex", "\n".join(lines))
 
 
+def partial(runs, method, fraction):
+    return select(runs, experiment="A4_partial_flip", method=method, label_poison_fraction=fraction)
+
+
+def fake_skew(runs, method):
+    if method in ("fedavg", "lfighter", "fltrust", "cc_only_m"):
+        return attacked_skew(runs, method)  # ignores reports: faking has no effect
+    return select(runs, experiment="A8_adaptive_skew", method=method)
+
+
+def table_adaptive(runs) -> None:
+    """Attackers that try to hide: partial flips and report faking, for AntiFLipper."""
+    fmt = lambda rows, metric, scale, d, sd=False: (
+        DASH if not rows or stat(rows, metric, scale)[0] is None else
+        f"{stat(rows, metric, scale)[0]:.{d}f}" + (rf"{{\scriptsize$\pm${stat(rows, metric, scale)[1]:.{d}f}}}" if sd else ""))
+    scenarios = [
+        ("Full flip (Table~\\ref{tab:main})", "1", headline(runs, PROPOSED), headline(runs, "fedavg")),
+        (r"Partial flip, 50\%", "1", partial(runs, PROPOSED, 0.5), partial(runs, "fedavg", 0.5) or None),
+        (r"Partial flip, 25\%", "1", partial(runs, PROPOSED, 0.25), partial(runs, "fedavg", 0.25) or None),
+        ("Report faking", "1", adaptive(runs, PROPOSED), headline(runs, "fedavg")),
+        ("Report faking", "0.1", fake_skew(runs, PROPOSED), attacked_skew(runs, "fedavg")),
+        (r"\quad residual only$^{*}$", "0.1", fake_skew(runs, "antiflipper_cr"), None),
+        (r"\quad consistency only$^{\ddagger}$", "0.1", fake_skew(runs, "cc_only_m"), None),
+    ]
+    lines = [
+        r"\begin{table}[t]", r"\centering",
+        r"\caption{Attackers that try to stay hidden (CIFAR-10, 40\% attackers).}",
+        r"\label{tab:adaptive}", r"\footnotesize", r"\setlength{\tabcolsep}{3.2pt}",
+        r"\begin{tabular}{@{}l c c cccc@{}}", r"\toprule",
+        r"& & \textbf{FedAvg} & \multicolumn{4}{c}{\textbf{AntiFLipper}} \\", r"\cmidrule(lr){3-3}\cmidrule(lr){4-7}",
+        r"\textbf{Attack} & $\alpha_D$ & Acc. & Acc.\,(\%) & Rec. & FPR & All found \\", r"\midrule",
+    ]
+    for i, (name, alpha, ours, base) in enumerate(scenarios):
+        lines.append(f"{name} & {alpha} & {fmt(base, 'last10_accuracy_mean', 100, 1) if base else DASH} & "
+                     f"{fmt(ours, 'last10_accuracy_mean', 100, 1, True)} & {fmt(ours, 'final_recall', 1, 2)} & "
+                     f"{fmt(ours, 'final_fpr', 1, 2)} & {full_detect_text(ours)}" + r" \\")
+        if i in (0, 2):
+            lines.append(r"\midrule")
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Partial flip: share of each attacker's samples relabelled, a fresh random subset in every round. FedAvg ignores reports, so its faking rows equal the honest-reporting runs; $^{*}$AntiFLipper without the consistency check. $^{\ddagger}$Consistency check alone with uniform trust; it ignores reports, so its row is the honest-reporting run. All found: seeds in which every attacker was excluded (mean round).}",
+              r"\end{table}", ""]
+    write("table_adaptive.tex", "\n".join(lines))
+
+
 MATCHED_TIMING = REPO / "Results_Backup_2026-11-23" / "timing_matched" / "fixed_workload_timing.csv"
 
 
@@ -331,6 +380,53 @@ def matched_timing() -> dict[str, float]:
     with MATCHED_TIMING.open(encoding="utf-8") as handle:
         return {r["method"]: float(r["mean_seconds"]) * 1000 for r in csv.DictReader(handle)
                 if r["dataset"] == "CIFAR10" and r["mean_seconds"] not in ("", None)}
+
+
+def matched_std_text() -> str:
+    """Spread of the matched benchmark for the two methods compared in the text."""
+    if not MATCHED_TIMING.exists():
+        return DASH
+    with MATCHED_TIMING.open(encoding="utf-8") as handle:
+        std = {r["method"]: float(r["std_seconds"]) * 1000 for r in csv.DictReader(handle)
+               if r["dataset"] == "CIFAR10" and r["std_seconds"] not in ("", None)}
+    return f"{std[PROPOSED]:.0f}\\,ms for AntiFLipper and {std['fedavg']:.0f}\\,ms for FedAvg"
+
+
+def client_size_range(runs, alpha) -> tuple[int, int]:
+    """Smallest and largest client dataset over the CIFAR-10 non-IID splits at this alpha."""
+    sizes = []
+    for r in runs:
+        if r.get("dataset") == "CIFAR10" and r.get("distribution") == "NON_IID" and float(r.get("dirichlet_alpha", 0)) == alpha:
+            meta = r["_dir"] / "partition_metadata.json"
+            if meta.exists():
+                sizes += json.loads(meta.read_text(encoding="utf-8"))["client_sizes"].values()
+    return (min(sizes), max(sizes)) if sizes else (0, 0)
+
+
+def residual_auc(runs, experiment, alpha, first_rounds=10) -> list[float]:
+    """Per seed: probability that a random attacker has a lower residual than a random honest
+    client, averaged over the first rounds (active clients the consistency check did not mark)."""
+    import numpy as np
+    out = []
+    sel = [r for r in runs if r.get("experiment") == experiment and r["method"] == PROPOSED
+           and r.get("dataset") == "CIFAR10" and r.get("distribution") == "NON_IID"
+           and float(r.get("dirichlet_alpha", 0)) == alpha]
+    for r in sorted(sel, key=lambda r: r["seed"]):
+        by = defaultdict(lambda: ([], []))
+        with (r["_dir"] / "client_history.csv").open(encoding="utf-8") as handle:
+            for x in csv.DictReader(handle):
+                if x["excluded"] == "1" or x["inconsistent"] == "1" or x["effective_report"] == "":
+                    continue
+                by[int(x["round"])][0 if x["attacker"] == "1" else 1].append(float(x["effective_report"]))
+        aucs = []
+        for t in range(first_rounds):
+            att, hon = by[t]
+            if att and hon:
+                a, h = np.array(att)[:, None], np.array(hon)[None, :]
+                aucs.append(float((a < h).mean() + 0.5 * (a == h).mean()))
+        if aucs:
+            out.append(statistics.fmean(aucs))
+    return out
 
 
 def table_cost(runs) -> None:
@@ -359,23 +455,22 @@ def table_cost(runs) -> None:
             lines.append(r"\midrule")
         lines.append(f"{NAMES[method].replace(' (reference)', '')} & {data} & {bench} & {observed} & {client} & {payload}" + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}",
-              r"\\[2pt]\parbox{\linewidth}{\scriptsize Matched: identical 20 updates on CPU. In training: measured per round; excluded clients are not averaged. FLTrust: aggregation + root training.}", r"\end{table}", ""]
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Matched: identical 20 updates on one CPU (Intel i7-8700, 6 threads, PyTorch 2.8), mean of 5 timed iterations after one warm-up; standard deviation " + matched_std_text() + r". In training: measured per round on an RTX 3090 GPU; excluded clients are not averaged. FLTrust: aggregation + root training.}", r"\end{table}", ""]
     write("table_cost.tex", "\n".join(lines))
 
 
 def table_sensitivity(runs) -> None:
-    settings = [("default", r"Default ($\rho{=}0.05$, $c_{\max}{=}6$, $z{=}2.5$)"),
-                ("rho=0.025", r"$\rho=0.025$"), ("rho=0.1", r"$\rho=0.1$"),
+    settings = [("default", r"Default ($c_{\max}{=}6$, $z{=}3$)"),
                 ("counter=3", r"$c_{\max}=3$"), ("counter=9", r"$c_{\max}=9$"),
-                ("z=2.0", r"$z=2.0$"), ("z=3.0", r"$z=3.0$")]
-    attack = [select(runs, experiment="A5_sensitivity", notes=n, malicious_client_fraction=0.4) for n, _ in settings]
-    cln = [select(runs, experiment="A5_sensitivity", notes=n, malicious_client_fraction=0.0) for n, _ in settings]
+                ("z=2.5", r"$z=2.5$"), ("z=3.5", r"$z=3.5$")]
+    attack = [select(runs, experiment="A9_sensitivity_full", notes=n, malicious_client_fraction=0.4) for n, _ in settings]
+    cln = [select(runs, experiment="A9_sensitivity_full", notes=n, malicious_client_fraction=0.0) for n, _ in settings]
     columns = [(Column("last10_accuracy_mean", 100, 1, best=None), attack),
                (Column("final_recall", 1, 2, best=None), attack),
                (Column("final_fpr", 1, 2, best="min"), cln)]
     lines = [
         r"\begin{table}[t]", r"\centering",
-        r"\caption{Sensitivity of the trust, flag and consistency parameters (raw reports + CC, MNIST non-IID).}",
+        r"\caption{Parameter sensitivity of AntiFLipper (MNIST non-IID, held-out seeds).}",
         r"\label{tab:sensitivity}", r"\footnotesize", r"\setlength{\tabcolsep}{5pt}",
         r"\begin{tabular}{@{}l ccc@{}}", r"\toprule",
         r"& \multicolumn{2}{c}{\textbf{40\% attack}} & \textbf{No attack} \\", r"\cmidrule(lr){2-3}\cmidrule(lr){4-4}",
@@ -429,22 +524,28 @@ def figure_ratio(runs) -> None:
 def figure_heterogeneity(runs) -> None:
     """No attackers: honest clients excluded and accuracy as the split becomes more skewed."""
     plt = _plt()
-    methods = ["antiflipper", "antiflipper_cc", "cc_only", "antiflipper_cr", PROPOSED]
+    methods = ["fedavg", "antiflipper", "antiflipper_cc", "antiflipper_cr", PROPOSED]
     alphas = (1.0, 0.5, 0.1)
     fig, axes = plt.subplots(1, 2, figsize=(3.45, 1.75))
-    width = 0.16
+    width = 0.19
     for i, method in enumerate(methods):
-        excl = [stat(clean(runs, method, a), "honest_excluded")[0] or 0 for a in alphas]
         acc = [stat(clean(runs, method, a), "last10_accuracy_mean", 100) for a in alphas]
-        xs = [k + (i - 2) * width for k in range(len(alphas))]
-        axes[0].bar(xs, excl, width, color=COLORS[method], label=PLAIN[method], edgecolor="white", linewidth=0.3)
-        axes[1].errorbar(range(len(alphas)), [m for m, _ in acc], yerr=[s for _, s in acc], capsize=1.5, elinewidth=0.6, **_style(method))
+        style = _style(method)
+        if method == "fedavg":
+            style.update(ls="--", marker=None)
+        axes[1].errorbar(range(len(alphas)), [m for m, _ in acc], yerr=[s for _, s in acc], capsize=1.5, elinewidth=0.6,
+                         label=PLAIN[method] + (" (no defense)" if method == "fedavg" else ""), **style)
+        if method == "fedavg":
+            continue
+        excl = [stat(clean(runs, method, a), "honest_excluded")[0] or 0 for a in alphas]
+        xs = [k + (i - 2.5) * width for k in range(len(alphas))]
+        axes[0].bar(xs, excl, width, color=COLORS[method], edgecolor="white", linewidth=0.3)
     for ax in axes:
         ax.set_xticks(range(len(alphas))); ax.set_xticklabels([f"{a:g}" for a in alphas]); ax.set_xlabel(r"Dirichlet $\alpha_D$")
     axes[0].set_ylabel("Honest clients excluded"); axes[0].set_ylim(0, 20)
     axes[1].set_ylabel("Accuracy (%)")
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.16), columnspacing=0.8, handlelength=1.2)
+    handles, labels = axes[1].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.16), columnspacing=0.8, handlelength=1.6)
     fig.tight_layout(pad=0.3, w_pad=0.8)
     fig.savefig(FIG / "gen_heterogeneity.pdf", bbox_inches="tight"); plt.close(fig)
 
@@ -508,7 +609,7 @@ def numbers(runs) -> None:
         "headAccKrum": v(headline(runs, "multi_krum"), acc, 100), "headAccKrumStd": s(headline(runs, "multi_krum"), acc, 100),
         "headFPRFLTrust": v(headline(runs, "fltrust"), "final_fpr", 1, 2), "headFPRRaw": v(headline(runs, R), "final_fpr", 1, 2),
         "headFPRcc": v(headline(runs, "antiflipper_cc"), "final_fpr", 1, 2),
-        "headFPRcconly": v(headline(runs, "cc_only"), "final_fpr", 1, 2),
+        "headFPRcconly": v(headline(runs, "cc_only_m"), "final_fpr", 1, 2),
         "headRecallLFighter": v(headline(runs, "lfighter"), "final_recall", 1, 2),
         "headRecallFLAME": v(headline(runs, "flame"), "final_recall", 1, 2),
         "headASR": v(headline(runs, P), "last10_asr", 100), "headASRFedAvg": v(headline(runs, "fedavg"), "last10_asr", 100),
@@ -565,6 +666,45 @@ def numbers(runs) -> None:
         "matchedKrum": mt("multi_krum"), "matchedFLAME": mt("flame"), "matchedLFighter": mt("lfighter"),
         "matchedRaw": mt("antiflipper"),
         "nRuns": str(len([r for r in runs if r["method"] != "fltrust_bnsafe"])),
+        # matched consistency check alone (z=3, cap), FedAvg without attackers, partial flips, faking under skew
+        "ccHeadAcc": v(headline(runs, "cc_only_m"), acc, 100), "ccHeadFPR": v(headline(runs, "cc_only_m"), "final_fpr", 1, 2),
+        "ccSkewAcc": v(attacked_skew(runs, "cc_only_m"), acc, 100),
+        "ccSkewRecall": v(attacked_skew(runs, "cc_only_m"), "final_recall", 1, 2),
+        "ccCleanAcc": v(clean(runs, "cc_only_m", 0.1), acc, 100),
+        # attackers found under strong skew with report faking, counted over all seeds
+        "fsFound": str(round(sum(float(r["final_recall"]) * round(r["num_clients"] * r["malicious_client_fraction"])
+                                 for r in fake_skew(runs, P)))),
+        "fsTotal": str(sum(round(r["num_clients"] * r["malicious_client_fraction"]) for r in fake_skew(runs, P))),
+        # sample-weighted FedAvg controls (rev2); dashes until the runs exist
+        "fedWCleanAcc": v(clean(runs, "fedavg_weighted", 0.1), acc, 100), "fedWCleanStd": s(clean(runs, "fedavg_weighted", 0.1), acc, 100),
+        "fedWCleanFinal": v(clean(runs, "fedavg_weighted", 0.1), "final_accuracy", 100),
+        "fedWSkewAcc": v(attacked_skew(runs, "fedavg_weighted"), acc, 100), "fedWSkewStd": s(attacked_skew(runs, "fedavg_weighted"), acc, 100),
+        "fedWSkewASR": v(attacked_skew(runs, "fedavg_weighted"), "last10_asr", 100),
+        "pfAccFedAvgHalf": v(partial(runs, "fedavg", 0.5), acc, 100), "pfAccFedAvgQuarter": v(partial(runs, "fedavg", 0.25), acc, 100),
+        "fedCleanAcc": v(clean(runs, "fedavg", 0.1), acc, 100), "fedCleanStd": s(clean(runs, "fedavg", 0.1), acc, 100),
+        "fedCleanFinal": v(clean(runs, "fedavg", 0.1), "final_accuracy", 100),
+        "fedCleanMid": v(clean(runs, "fedavg", 0.5), acc, 100), "fedCleanHigh": v(clean(runs, "fedavg", 1.0), acc, 100),
+        "pfAccHalf": v(partial(runs, P, 0.5), acc, 100), "pfAccQuarter": v(partial(runs, P, 0.25), acc, 100),
+        "pfDetHalf": v(partial(runs, P, 0.5), "full_detection_round", 1, 0),
+        "pfDetQuarter": v(partial(runs, P, 0.25), "full_detection_round", 1, 0),
+        "fakeDet": v(adaptive(runs, P), "full_detection_round", 1, 0),
+        "fsAcc": v(fake_skew(runs, P), acc, 100), "fsRecall": v(fake_skew(runs, P), "final_recall", 1, 2),
+        "fsRecallCR": v(fake_skew(runs, "antiflipper_cr"), "final_recall", 1, 2),
+        # data split and residual separation (review response)
+        "sizeLowMin": f"{client_size_range(runs, 0.1)[0]:,}".replace(",", "{,}"),
+        "sizeLowMax": f"{client_size_range(runs, 0.1)[1]:,}".replace(",", "{,}"),
+        "sizeHighMin": f"{client_size_range(runs, 1.0)[0]:,}".replace(",", "{,}"),
+        "sizeHighMax": f"{client_size_range(runs, 1.0)[1]:,}".replace(",", "{,}"),
+        "aucHighMin": f"{min(residual_auc(runs, 'A1_headline', 1.0)):.2f}",
+        "aucHighMax": f"{max(residual_auc(runs, 'A1_headline', 1.0)):.2f}",
+        "aucLowMin": f"{min(residual_auc(runs, 'A2_attacked_heterogeneity', 0.1)):.2f}",
+        "aucLowMax": f"{max(residual_auc(runs, 'A2_attacked_heterogeneity', 0.1)):.2f}",
+        "trajSeed": str(sorted(r["seed"] for r in clean(runs, P, 0.1))[1]),
+        "fsAccFedAvg": v(fake_skew(runs, "fedavg"), acc, 100),
+        "sensFPRmax": (lambda rows: DASH if not rows else f"{max(float(r['final_fpr']) for r in rows):.2f}")(
+            select(runs, experiment="A9_sensitivity_full", malicious_client_fraction=0.0)),
+        "sensRecallMin": (lambda rows: DASH if not rows else f"{min(float(r['final_recall']) for r in rows):.2f}")(
+            select(runs, experiment="A9_sensitivity_full", malicious_client_fraction=0.4)),
     }
     write("numbers.tex", "% generated by make_results.py -- do not edit\n" +
           "".join(rf"\newcommand{{\{k}}}{{{val}}}" "\n" for k, val in macros.items()))
@@ -573,9 +713,9 @@ def numbers(runs) -> None:
 def main() -> None:
     runs = load_runs()
     FIG.mkdir(parents=True, exist_ok=True)
-    for stale in ("table_headline.tex", "table_detection.tex", "table_heterogeneity.tex", "table_adaptive.tex"):
+    for stale in ("table_headline.tex", "table_detection.tex", "table_heterogeneity.tex"):
         (OUT / stale).unlink(missing_ok=True)
-    for build in (table_main, table_ablation, table_skew, table_cost, table_sensitivity,
+    for build in (table_main, table_ablation, table_skew, table_adaptive, table_cost, table_sensitivity,
                   figure_ratio, figure_heterogeneity, figure_trajectories, numbers):
         build(runs)
     counts = defaultdict(int)

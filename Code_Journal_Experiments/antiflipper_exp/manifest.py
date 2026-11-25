@@ -9,7 +9,7 @@ from .config import CC_V2, ExperimentConfig
 
 
 SEEDS = (7, 19, 31)
-PROFILES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix", "rev")
+PROFILES = ("smoke", "core", "full", "cc_v2", "cr", "fltrust_fix", "rev", "rev2")
 # Held out from every reported comparison; used only for hyperparameter sensitivity.
 SENSITIVITY_SEEDS = (101, 113, 127)
 
@@ -234,6 +234,26 @@ def rev_jobs() -> list[ExperimentConfig]:
     return _dedupe(jobs)
 
 
+FEDAVG_WEIGHTED = {"method": "fedavg_weighted"}
+
+
+def rev2_jobs() -> list[ExperimentConfig]:
+    """Controls requested by the external-style review of paper v10 (2026-11-25).
+
+    Sample-weighted FedAvg under strong skew, with and without attackers, and equal-weight
+    FedAvg with partial flips (the missing baseline for Table IV)."""
+    def job(seed, experiment, variant, **overrides):
+        return replace(base("CIFAR10", "NON_IID", variant["method"], seed, experiment), tags=("REV2",), **overrides)
+
+    jobs: list[ExperimentConfig] = []
+    for seed in SEEDS:
+        jobs.append(job(seed, "A2_clean_heterogeneity", FEDAVG_WEIGHTED, dirichlet_alpha=0.1, malicious_client_fraction=0.0))
+        jobs.append(job(seed, "A2_attacked_heterogeneity", FEDAVG_WEIGHTED, dirichlet_alpha=0.1))
+    for seed, fraction in itertools.product(SEEDS, (0.5, 0.25)):
+        jobs.append(job(seed, "A4_partial_flip", FEDAVG, label_poison_fraction=fraction))
+    return _dedupe(jobs)
+
+
 def build(profile: str) -> list[ExperimentConfig]:
     if profile == "smoke":
         return smoke_jobs()
@@ -243,6 +263,8 @@ def build(profile: str) -> list[ExperimentConfig]:
         return fltrust_fix_jobs()
     if profile == "rev":
         return rev_jobs()
+    if profile == "rev2":
+        return rev2_jobs()
     if profile not in PROFILES:
         raise ValueError(f"Unknown profile: {profile}")
     reference = core_jobs()
