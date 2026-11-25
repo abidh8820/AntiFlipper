@@ -300,3 +300,20 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - pull_results.sh now also copies results/rev and the antiflipper-rev journal (service_events_rev.log). Task Scheduler pulls: Nov 24 18:00; Nov 25 00:30, 07:00, 13:30, 20:00.
 - Monitor: ssh -t ndag@100.75.182.25 "cd ~/Desktop/AAR/AntiFlipper/Code_Journal_Experiments && ./monitor.sh" ; logs: journalctl --user -u antiflipper-rev -f ; stop: systemctl --user stop antiflipper-rev
 - 2026-11-24: redesigned Fig. 1 (TikZ): stacked client cards with local-data cylinder, colour-coded report (blue) and update (orange) paths, shadows, M6 as a tall aggregation block; compiles clean, 7 pages.
+
+## 2026-11-24 (afternoon check)
+- Rev run healthy at 14:34: 6/69 done, 3 running, no restarts, GPU only ours. On pace (P1 ~midnight, all ~13:00 Nov 25).
+- Early seed-7 results:
+  - A8 (report faking at alpha 0.1): AntiFLipper recall 0.125, acc 32.4%. The method fails here; the paper must state it.
+  - Matched CC-only: headline 72.7% (same as ours), attack alpha 0.1 36.4% with recall 0.125 (ours 49.1%, recall 0.96). So CR is what matters under skew.
+- Next: wait for the other seeds, then add A8 and the matched CC-only rows to the tables and rewrite the claims.
+- 21:38: 22/69 done, no restarts. A8 complete across all 3 seeds: report faking at alpha 0.1 defeats detection for all variants (recall 0 to 0.125; acc CR_CC 43.1, CR 44.5, CC-only 44.6). Must be stated as a limitation. P1 is expected ~23:30.
+- Evening: CV-entry fact sheet compiled from v10 with file:line citations. Flagged: no arXiv record in repo; v10 abstract (line 33) and lines 222/242 are now outdated by the faking + strong-skew result; the 1.1% client overhead was analytical (v8 line 385); v10 measures 6.8%.
+
+## 2026-11-25
+- 00:19: P1 of rev is complete (28/69 jobs). P2 (partial flips) runs until ~05:30, P3 (MNIST sensitivity) until ~12:30.
+- The user wants to keep the original title. v10 is reverted to "AntiFLipper: A Secure and Efficient Defense Against Label-Flipping Attacks in Federated Learning" and the PDF rebuilt (7 pages). The change is not committed yet.
+  - "Efficient" must be argued as no server data plus matched server time on par with FedAvg and about 7-24x below FLTrust/FLAME/Multi-Krum, not as faster than FedAvg.
+- Title fits on two lines now at 21pt with standard IEEEtran margins. v8 fit at 24pt only because it used custom narrow margins (0.65/0.59 in).
+- Affiliation fix: authors 4, 5 and 6 (Bappy, Tahrim Hossain, Tariqul Islam) are at UMBC, not Syracuse. Fixed in v10; older versions left unchanged.
+- 08:05: 55/69 done; P2 complete, only P3 MNIST left (~09:45). Partial flips (full method, 3 seeds): flip 0.5 gives acc 71.3, recall 1, FPR 0, detection at round ~21.5; flip 0.25 gives acc 72.1, recall 1, FPR 0, round ~35.6 (full flip: round 15). There is no baseline under partial flips.
