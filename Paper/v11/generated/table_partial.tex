@@ -1,0 +1,21 @@
+\begin{table*}[t]
+\centering
+\caption{Partial flips and partial participation (CIFAR-10 non-IID, $\alpha_D{=}1$, 40\% attackers, mean over three seeds).}
+\label{tab:partial}
+\footnotesize
+\setlength{\tabcolsep}{3.4pt}
+\begin{tabular}{@{}l cccc cccc cccc@{}}
+\toprule
+& \multicolumn{4}{c}{\textbf{Partial flip, 50\% of labels}} & \multicolumn{4}{c}{\textbf{Partial flip, 25\% of labels}} & \multicolumn{4}{c}{\textbf{Full flip, 50\% participation}} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(l){10-13}
+\textbf{Method} & Acc.\,(\%) & ASR & Rec. & FPR & Acc.\,(\%) & ASR & Rec. & FPR & Acc.\,(\%) & ASR & Rec.$^{*}$ & FPR$^{*}$ \\
+\midrule
+FedAvg & \textbf{71.9} & 5.0 & n/a & n/a & \textbf{73.6} & 3.7 & n/a & n/a & 46.1{\scriptsize$\pm$3.0} & 30.6 & n/a & n/a \\
+LFighter & 70.4 & 4.2 & 0.46 & 0.08 & 72.3 & 3.7 & 0.17 & 0.14 & 63.6{\scriptsize$\pm$6.5} & 10.0 & 0.84 & 0.13 \\
+FLTrust (BN-safe)$^{\dagger}$ & 70.5 & 4.5 & 0.67 & 0.31 & 66.1 & 4.3 & 0.50 & 0.19 & 62.1{\scriptsize$\pm$2.6} & 11.1 & 0.50 & 0.15 \\
+\midrule
+\textbf{AntiFLipper} & 71.3 & \textbf{3.2} & \textbf{1.00} & \textbf{0.00} & 72.1 & \textbf{3.2} & \textbf{1.00} & \textbf{0.00} & \textbf{71.0}{\scriptsize$\pm$1.0} & \textbf{3.3} & \textbf{1.00} & \textbf{0.00} \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize Partial flip: share of each attacker's samples relabelled, a fresh random subset in every round; all clients take part. Participation: a random half of the active clients is sampled in every round. $^{\dagger}$BN-safe aggregation and a 100-sample clean root set. $^{*}$AntiFLipper: clients excluded in the final round. Baselines down-weight only the clients sampled in a round, so for them we report the share of sampled attackers (honest clients) given zero weight over the last 10 rounds.}
+\end{table*}

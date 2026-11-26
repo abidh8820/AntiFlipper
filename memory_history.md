@@ -395,3 +395,25 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
 - The whole SPARCFL tree is SIGSTOPped (runner 411313 plus children 608100, 673866, 608102, 608104). The watcher ~/af_rev3_handoff.sh (log ~/af_rev3_handoff.log) resumes them when rev3 ends, or after 20 h at the latest. The pid list is in ~/af_rev3_frozen_pids.txt.
 - pull_results.sh and Paper/v11/make_results.py now include rev3. The paper does not use the rev3 results yet. Not committed.
 - First rounds of rev3: ~37 s/round per job at 50% participation with 4 workers (GPU 100%), about 1 h per participation run and about 2 h per partial-flip run. ETA for all 24 is about 9–10 h, i.e. around 09:00–10:00 on 2026-11-26.
+- 2026-11-26 02:08: rev3 4/24 done, no failures; SPARCFL still frozen as planned. Seed 7 at 50% participation: AntiFLipper 71.3% with all 8 attackers excluded and 0 false positives; FLTrust 60.6; LFighter 59.3; FedAvg 42.6 (full participation: 72.0 / 69.2 / 59.0 / 44.2). Updated ETA ~07:00–08:00.
+- 2026-11-26 09:50: rev3 20/24 done, 0 failures, last 4 (seed 31 partial flips) due ~10:40. Partial participation, all 3 seeds: AntiFLipper 71.0 (every attacker excluded, 0 false positives, each seed) vs LFighter 63.6, FLTrust 62.2, FedAvg 46.1. Baseline partial flips (2 seeds): about 70–72%, matching AntiFLipper and FedAvg; their detection is weak (LFighter recall 0–0.5).
+
+## 2026-11-26 10:25 — rev3 done; v11 conference + journal versions
+- rev3 finished: 24/24, 0 failures. The watcher resumed SPARCFL at 10:20:54 (runner 411313 back in state S). Pulled; make_results now loads 438 runs.
+- rev3 final:
+  - Participation 0.5: AntiFLipper 71.0±1.0, recall 1, FPR 0, 3/3 seeds, detected by round 34. LFighter 63.6, FLTrust BN-safe 62.1, FedAvg 46.1.
+  - Baseline partial flips (50/25%): LFighter recall 0.46/0.17, FLTrust BN-safe 0.67/0.50, both with false positives. Accuracy is about the same for all methods.
+- Correction to what I told the user earlier: the rev3 FLTrust runs are BN-safe (full participation 57.8), so FLTrust does not drop under partial participation.
+- make_results.py changes:
+  - Baselines under partial participation are scored on sampled clients over the last 10 rounds (`pp_recall`/`pp_fpr`); the final-round metric counts unsampled attackers as misses.
+  - New tables: `table_partial` (table*), `table_seeds`, `table_auc`. New figure: `gen_participation.pdf`. `table_adaptive` is now faking only.
+  - New pp*/pf* macros; nRuns now counts all runs.
+- Paper/v11 now has two versions:
+  - `AntiFlipper_v11.tex` (conference): 8 pp including references (7 of body). Partial-participation subsection added; algorithm/M6 use the sampled set S_t.
+  - `AntiFlipper_v11_journal.tex` (IEEE Transactions): 11 pp. Adds Q1–Q4, related-work, notation and hyperparameter tables, Prop. 4 self-inclusion bias with proof, a privacy protocol, per-seed and AUC tables, the participation figure, the sensitivity table, and a Discussion section.
+- bib: added bonawitz2017practical and hsu2019measuring. README updated. Nothing committed.
+- Open: the leave-one-out or robust per-class reference for faking under skew (needs runs; ask first, SPARCFL has priority). Choose the target journal and adapt the template and bios.
+- 2026-11-26: the user asked whether the results are good. My honest assessment:
+  - Strong under moderate skew (headline, faking, partial attacks, participation, cost), and it removes the honest-client cascade under strong skew.
+  - Weak spots: accuracy under strong skew (loses to sample-weighted FedAvg without attackers; high variance with attackers), faking under strong skew (1/24), a thin margin over the reference FLTrust, and small scale (2 image datasets, N=20 for CIFAR).
+  - Good enough for a conference. A strong journal would want the leave-one-out fix, a third dataset and a larger federation. Suggested those runs; not launched.

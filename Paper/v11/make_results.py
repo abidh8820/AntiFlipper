@@ -92,6 +92,33 @@ def add_round_metrics(run: dict) -> None:
     run["last10_asr"] = statistics.fmean(asr) if asr else None
     run["nonfinite_rounds"] = sum(1 for r in rows if not math.isfinite(float(r.get("loss") or "nan")))
     run["full_detected"] = 1.0 if run.get("full_detection_round") not in (None, "") else 0.0
+    if run.get("experiment") == "A10_partial_participation":
+        add_sampled_detection(run, len(rows))
+
+
+def add_sampled_detection(run: dict, n_rounds: int, window: int = 10) -> None:
+    """Partial participation: detection that does not count unsampled clients as missed.
+
+    AntiFLipper excludes permanently, so its final recall and FPR stay as they are. A baseline
+    only down-weights the clients sampled in a round, so its final-round confusion counts every
+    unsampled attacker as a miss. For baselines we use the share of sampled attackers (honest
+    clients) given zero weight, over the last `window` rounds."""
+    if str(run.get("method", "")).startswith("antiflipper"):
+        run["pp_recall"], run["pp_fpr"] = run.get("final_recall"), run.get("final_fpr")
+        return
+    path = run["_dir"] / "client_history.csv"
+    if not path.exists():
+        return
+    att = [0, 0]; hon = [0, 0]
+    with path.open(encoding="utf-8") as handle:
+        for x in csv.DictReader(handle):
+            if int(x["round"]) < n_rounds - window or x["selected"] != "1":
+                continue
+            zero = float(x["aggregation_weight"] or 0) <= 1e-12
+            bucket = att if x["attacker"] == "1" else hon
+            bucket[0] += zero; bucket[1] += 1
+    run["pp_recall"] = att[0] / att[1] if att[1] else None
+    run["pp_fpr"] = hon[0] / hon[1] if hon[1] else None
 
 
 TIMING_FIELDS = ("defense_seconds", "client_train_seconds", "client_eval_seconds", "root_training_seconds", "round_seconds")
@@ -346,9 +373,7 @@ def table_adaptive(runs) -> None:
         DASH if not rows or stat(rows, metric, scale)[0] is None else
         f"{stat(rows, metric, scale)[0]:.{d}f}" + (rf"{{\scriptsize$\pm${stat(rows, metric, scale)[1]:.{d}f}}}" if sd else ""))
     scenarios = [
-        ("Full flip", "1", headline(runs, PROPOSED), headline(runs, "fedavg")),
-        (r"Partial, 50\%", "1", partial(runs, PROPOSED, 0.5), partial(runs, "fedavg", 0.5) or None),
-        (r"Partial, 25\%", "1", partial(runs, PROPOSED, 0.25), partial(runs, "fedavg", 0.25) or None),
+        ("Honest reports", "1", headline(runs, PROPOSED), headline(runs, "fedavg")),
         ("Faking", "1", adaptive(runs, PROPOSED), headline(runs, "fedavg")),
         ("Faking", "0.1", fake_skew(runs, PROPOSED), attacked_skew(runs, "fedavg")),
         (r"\quad CR only$^{*}$", "0.1", fake_skew(runs, "antiflipper_cr"), None),
@@ -356,7 +381,7 @@ def table_adaptive(runs) -> None:
     ]
     lines = [
         r"\begin{table}[t]", r"\centering",
-        r"\caption{Attackers that try to stay hidden (CIFAR-10, 40\% attackers).}",
+        r"\caption{Report faking (CIFAR-10, 40\% full flips).}",
         r"\label{tab:adaptive}", r"\footnotesize", r"\setlength{\tabcolsep}{2.4pt}",
         r"\begin{tabular}{@{}l c cc ccccc@{}}", r"\toprule",
         r"& & \multicolumn{2}{c}{\textbf{FedAvg}} & \multicolumn{5}{c}{\textbf{AntiFLipper}} \\", r"\cmidrule(lr){3-4}\cmidrule(l){5-9}",
@@ -367,12 +392,108 @@ def table_adaptive(runs) -> None:
                      f"{fmt(base, 'last10_asr', 100, 1) if base else DASH} & "
                      f"{fmt(ours, 'last10_accuracy_mean', 100, 1, True)} & {fmt(ours, 'last10_asr', 100, 1)} & "
                      f"{fmt(ours, 'final_recall', 1, 2)} & {fmt(ours, 'final_fpr', 1, 2)} & {full_detect_text(ours)}" + r" \\")
-        if i in (0, 2):
+        if i == 0:
             lines.append(r"\midrule")
     lines += [r"\bottomrule", r"\end{tabular}",
-              r"\\[2pt]\parbox{\linewidth}{\scriptsize Partial: share of each attacker's samples relabelled, a fresh random subset in every round. FedAvg ignores reports, so its faking rows repeat the honest-reporting runs. $^{*}$Residual and cap, no consistency check. $^{\ddagger}$Consistency check and cap with uniform trust; it ignores reports, so its row is the honest-reporting run. Found: seeds in which every attacker was excluded (mean round).}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Faking: attackers report statistics on their original labels. FedAvg ignores reports, so its faking rows repeat the honest-reporting runs. $^{*}$Residual and cap, no consistency check. $^{\ddagger}$Consistency check and cap with uniform trust; it ignores reports, so its row is the honest-reporting run. Found: seeds in which every attacker was excluded (mean round).}",
               r"\end{table}", ""]
     write("table_adaptive.tex", "\n".join(lines))
+
+
+def participation(runs, method):
+    return select(runs, experiment="A10_partial_participation", method=method)
+
+
+PARTIAL_METHODS = ["fedavg", "lfighter", "fltrust_bnsafe", PROPOSED]
+
+
+def table_partial(runs) -> None:
+    """Partial flips (all four methods) and partial participation, one row per method."""
+    m = PARTIAL_METHODS
+    det = lambda sets: [None if x == "fedavg" else rows for x, rows in zip(m, sets)]
+    blocks = [[partial(runs, x, 0.5) for x in m], [partial(runs, x, 0.25) for x in m]]
+    pp = [participation(runs, x) for x in m]
+    columns = []
+    for sets in blocks:
+        columns += [(Column("last10_accuracy_mean", 100, 1), sets), (Column("last10_asr", 100, 1, best="min"), sets),
+                    (Column("final_recall", 1, 2), det(sets)), (Column("final_fpr", 1, 2, best="min"), det(sets))]
+    columns += [(Column("last10_accuracy_mean", 100, 1, std=True), pp), (Column("last10_asr", 100, 1, best="min"), pp),
+                (Column("pp_recall", 1, 2), det(pp)), (Column("pp_fpr", 1, 2, best="min"), det(pp))]
+    names = {"fltrust_bnsafe": r"FLTrust (BN-safe)$^{\dagger}$"}
+    lines = [
+        r"\begin{table*}[t]", r"\centering",
+        r"\caption{Partial flips and partial participation (CIFAR-10 non-IID, $\alpha_D{=}1$, 40\% attackers, mean over three seeds).}",
+        r"\label{tab:partial}", r"\footnotesize", r"\setlength{\tabcolsep}{3.4pt}",
+        r"\begin{tabular}{@{}l cccc cccc cccc@{}}", r"\toprule",
+        r"& \multicolumn{4}{c}{\textbf{Partial flip, 50\% of labels}} & \multicolumn{4}{c}{\textbf{Partial flip, 25\% of labels}} & \multicolumn{4}{c}{\textbf{Full flip, 50\% participation}} \\",
+        r"\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(l){10-13}",
+        r"\textbf{Method} & Acc.\,(\%) & ASR & Rec. & FPR & Acc.\,(\%) & ASR & Rec. & FPR & Acc.\,(\%) & ASR & Rec.$^{*}$ & FPR$^{*}$ \\", r"\midrule",
+    ]
+    lines += render([names.get(x, NAMES[x]) for x in m], columns, rule_after={len(m) - 2})
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Partial flip: share of each attacker's samples relabelled, a fresh random subset in every round; all clients take part. Participation: a random half of the active clients is sampled in every round. $^{\dagger}$BN-safe aggregation and a 100-sample clean root set. $^{*}$AntiFLipper: clients excluded in the final round. Baselines down-weight only the clients sampled in a round, so for them we report the share of sampled attackers (honest clients) given zero weight over the last 10 rounds.}",
+              r"\end{table*}", ""]
+    write("table_partial.tex", "\n".join(lines))
+
+
+def table_seeds(runs) -> None:
+    """Journal: per-seed results under strong skew, where seed-to-seed variation is large."""
+    seeds = sorted({r["seed"] for r in attacked_skew(runs, PROPOSED)})
+    clean_methods = ["fedavg", "fedavg_weighted", "antiflipper_cr", PROPOSED]
+    attack_methods = ["fedavg", "fedavg_weighted", "lfighter", "fltrust", "antiflipper", PROPOSED]
+    short = {"fedavg_weighted": "FedAvg (weighted)", "fltrust": "FLTrust", "antiflipper_cr": "CR + cap (no CC)"}
+    by_seed = lambda rows: {r["seed"]: r for r in rows}
+    lines = [
+        r"\begin{table}[t]", r"\centering",
+        r"\caption{Per-seed results under strong skew (CIFAR-10, $\alpha_D{=}0.1$). Accuracy (\%) and, with attackers, ASR (\%).}",
+        r"\label{tab:seeds}", r"\footnotesize", r"\setlength{\tabcolsep}{2.6pt}",
+        r"\begin{tabular}{@{}l " + "c" * len(seeds) + " " + "cc" * len(seeds) + r"@{}}", r"\toprule",
+        r"& \multicolumn{" + str(len(seeds)) + r"}{c}{\textbf{No attack}} & \multicolumn{" + str(2 * len(seeds)) + r"}{c}{\textbf{40\% attackers}} \\",
+        r"\cmidrule(lr){2-" + str(1 + len(seeds)) + r"}\cmidrule(l){" + str(2 + len(seeds)) + "-" + str(1 + 3 * len(seeds)) + "}",
+        r"\textbf{Seed} & " + " & ".join(str(x) for x in seeds) + " & " + " & ".join(rf"\multicolumn{{2}}{{c}}{{{x}}}" for x in seeds) + r" \\",
+        r"\textbf{Method} & " + " & ".join("Acc." for _ in seeds) + " & " + " & ".join("Acc. & ASR" for _ in seeds) + r" \\", r"\midrule",
+    ]
+    for method in attack_methods + [x for x in clean_methods if x not in attack_methods]:
+        c = by_seed(clean(runs, method, 0.1)) if method in clean_methods else {}
+        a = by_seed(attacked_skew(runs, method)) if method in attack_methods else {}
+        cells = [f"{100 * float(c[x]['last10_accuracy_mean']):.1f}" if x in c else DASH for x in seeds]
+        for x in seeds:
+            cells += ([f"{100 * float(a[x]['last10_accuracy_mean']):.1f}", f"{100 * float(a[x]['last10_asr']):.1f}"]
+                      if x in a else [DASH, DASH])
+        lines.append(short.get(method, NAMES[method]) + " & " + " & ".join(cells) + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize Last-10-round means. --: not run in this setting.}", r"\end{table}", ""]
+    write("table_seeds.tex", "\n".join(lines))
+
+
+def table_auc(runs) -> None:
+    """Journal: how well reports separate attackers from honest clients in the first 10 rounds."""
+    span = lambda vals: DASH if not vals else (f"{min(vals):.2f}--{max(vals):.2f}" if len(vals) > 1 else f"{vals[0]:.2f}")
+    rows = [
+        ("Honest", "1", "AntiFLipper", span(residual_auc(runs, "A1_headline", 1.0, method="antiflipper_cr", column="raw_report")),
+         span(residual_auc(runs, "A1_headline", 1.0))),
+        ("Honest", "0.1", "AntiFLipper", span(residual_auc(runs, "A2_attacked_heterogeneity", 0.1, method="antiflipper_cr", column="raw_report")),
+         span(residual_auc(runs, "A2_attacked_heterogeneity", 0.1))),
+        ("Faked", "1", "CR + cap", span(residual_auc(runs, "A7_adaptive_report", 1.0, method="antiflipper_cr", column="raw_report")),
+         span(residual_auc(runs, "A7_adaptive_report", 1.0, method="antiflipper_cr"))),
+        ("Faked", "0.1", "CR + cap", span(residual_auc(runs, "A8_adaptive_skew", 0.1, method="antiflipper_cr", column="raw_report")),
+         span(residual_auc(runs, "A8_adaptive_skew", 0.1, method="antiflipper_cr"))),
+    ]
+    lines = [
+        r"\begin{table}[t]", r"\centering",
+        r"\caption{Separation of attackers by their reports: AUC over the first 10 rounds, range over three seeds (0.5 = chance).}",
+        r"\label{tab:auc}", r"\footnotesize", r"\setlength{\tabcolsep}{4pt}",
+        r"\begin{tabular}{@{}cc l cc@{}}", r"\toprule",
+        r"\textbf{Reports} & $\alpha_D$ & \textbf{Run} & Raw report $a_j$ & Residual $r_j$ \\", r"\midrule",
+    ]
+    for i, row in enumerate(rows):
+        lines.append(" & ".join(row) + r" \\")
+        if i == 1:
+            lines.append(r"\midrule")
+    lines += [r"\bottomrule", r"\end{tabular}",
+              r"\\[2pt]\parbox{\linewidth}{\scriptsize AUC: probability that a random attacker has a lower value than a random honest client, among active clients not marked by CC, averaged over rounds 0--9. Faking rows use the CR-only runs, where no client is marked by CC.}",
+              r"\end{table}", ""]
+    write("table_auc.tex", "\n".join(lines))
 
 
 MATCHED_TIMING = REPO / "Results_Backup_2026-11-23" / "timing_matched" / "fixed_workload_timing.csv"
@@ -587,6 +708,38 @@ def figure_trajectories(runs) -> None:
     fig.savefig(FIG / "gen_trajectories.pdf", bbox_inches="tight"); plt.close(fig)
 
 
+def figure_participation(runs) -> None:
+    """Journal: mean accuracy per round (over seeds) with half participation; AntiFLipper with full participation dashed."""
+    plt = _plt()
+    fig, ax = plt.subplots(1, 1, figsize=(3.45, 1.75))
+
+    def curve(rows):
+        series = []
+        for r in rows:
+            with (r["_dir"] / "round_metrics.csv").open(encoding="utf-8") as handle:
+                series.append([100 * float(x["accuracy"]) for x in csv.DictReader(handle)])
+        if not series:
+            return None
+        n = min(len(x) for x in series)
+        mean = [statistics.fmean(x[i] for x in series) for i in range(n)]
+        return [statistics.fmean(mean[max(0, i - 4):i + 1]) for i in range(n)]
+
+    names = dict(PLAIN, fltrust_bnsafe="FLTrust (BN-safe)")
+    colors = dict(COLORS, fltrust_bnsafe=COLORS["fltrust"])
+    for method in PARTIAL_METHODS:
+        y = curve(participation(runs, method))
+        if y:
+            ax.plot(range(len(y)), y, color=colors[method], lw=1.6 if method == PROPOSED else 1.1, label=names[method] + ", 50%")
+    y = curve(headline(runs, PROPOSED))
+    if y:
+        ax.plot(range(len(y)), y, color=COLORS[PROPOSED], lw=1.0, ls="--", label="AntiFLipper, full")
+    ax.set_xlabel("Round"); ax.set_ylabel("Accuracy (%, 5-round avg.)"); ax.set_ylim(0, 80)
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.17), columnspacing=0.8, handlelength=1.6)
+    fig.tight_layout(pad=0.3)
+    fig.savefig(FIG / "gen_participation.pdf", bbox_inches="tight"); plt.close(fig)
+
+
 # ----------------------------------------------------------------------------- in-text numbers
 
 def override_share(rows) -> str:
@@ -687,7 +840,7 @@ def numbers(runs) -> None:
         "matchedOurs": mt(PROPOSED), "matchedFedAvg": mt("fedavg"), "matchedFLTrust": mt("fltrust"),
         "matchedKrum": mt("multi_krum"), "matchedFLAME": mt("flame"), "matchedLFighter": mt("lfighter"),
         "matchedRaw": mt("antiflipper"),
-        "nRuns": str(len([r for r in runs if r["method"] != "fltrust_bnsafe"])),
+        "nRuns": str(len(runs)),
         # matched consistency check alone (z=3, cap), FedAvg without attackers, partial flips, faking under skew
         "ccHeadAcc": v(headline(runs, "cc_only_m"), acc, 100), "ccHeadFPR": v(headline(runs, "cc_only_m"), "final_fpr", 1, 2),
         "ccSkewAcc": v(attacked_skew(runs, "cc_only_m"), acc, 100),
@@ -740,6 +893,37 @@ def numbers(runs) -> None:
             select(runs, experiment="A9_sensitivity_full", malicious_client_fraction=0.4)),
         "sensAccMax": (lambda rows: DASH if not rows else f"{max(100 * float(r['last10_accuracy_mean']) for r in rows):.1f}")(
             select(runs, experiment="A9_sensitivity_full", malicious_client_fraction=0.4)),
+        # rev3: partial participation and partial flips of the baselines
+        "ppAcc": v(participation(runs, P), acc, 100), "ppAccStd": s(participation(runs, P), acc, 100),
+        "ppAccMin": (lambda rows: DASH if not rows else f"{min(100 * float(r[acc]) for r in rows):.1f}")(participation(runs, P)),
+        "ppAccFedAvg": v(participation(runs, "fedavg"), acc, 100),
+        "ppAccLFighter": v(participation(runs, "lfighter"), acc, 100), "ppAccLFighterStd": s(participation(runs, "lfighter"), acc, 100),
+        "ppAccFLTrust": v(participation(runs, "fltrust_bnsafe"), acc, 100),
+        "ppASR": v(participation(runs, P), "last10_asr", 100), "ppASRFedAvg": v(participation(runs, "fedavg"), "last10_asr", 100),
+        "ppASRLFighter": v(participation(runs, "lfighter"), "last10_asr", 100),
+        "ppASRFLTrust": v(participation(runs, "fltrust_bnsafe"), "last10_asr", 100),
+        "ppRecall": v(participation(runs, P), "final_recall", 1, 2), "ppFPR": v(participation(runs, P), "final_fpr", 1, 2),
+        "ppFull": full_detect_text(participation(runs, P)).split(" ")[0],
+        "ppDet": v(participation(runs, P), "full_detection_round", 1, 0),
+        "ppRecallLFighter": v(participation(runs, "lfighter"), "pp_recall", 1, 2),
+        "ppRecallFLTrust": v(participation(runs, "fltrust_bnsafe"), "pp_recall", 1, 2),
+        "ppFPRLFighter": v(participation(runs, "lfighter"), "pp_fpr", 1, 2),
+        "ppFPRFLTrust": v(participation(runs, "fltrust_bnsafe"), "pp_fpr", 1, 2),
+        "pfAccLFighterHalf": v(partial(runs, "lfighter", 0.5), acc, 100), "pfAccLFighterQuarter": v(partial(runs, "lfighter", 0.25), acc, 100),
+        "pfAccFLTrustHalf": v(partial(runs, "fltrust_bnsafe", 0.5), acc, 100), "pfAccFLTrustQuarter": v(partial(runs, "fltrust_bnsafe", 0.25), acc, 100),
+        "pfRecLFighterHalf": v(partial(runs, "lfighter", 0.5), "final_recall", 1, 2),
+        "pfRecLFighterQuarter": v(partial(runs, "lfighter", 0.25), "final_recall", 1, 2),
+        "pfRecFLTrustHalf": v(partial(runs, "fltrust_bnsafe", 0.5), "final_recall", 1, 2),
+        "pfRecFLTrustQuarter": v(partial(runs, "fltrust_bnsafe", 0.25), "final_recall", 1, 2),
+        "pfFPRLFighterMax": (lambda rows: DASH if not rows else f"{max(float(r['final_fpr']) for r in rows):.2f}")(
+            partial(runs, "lfighter", 0.5) + partial(runs, "lfighter", 0.25)),
+        "pfFPRFLTrustMax": (lambda rows: DASH if not rows else f"{max(float(r['final_fpr']) for r in rows):.2f}")(
+            partial(runs, "fltrust_bnsafe", 0.5) + partial(runs, "fltrust_bnsafe", 0.25)),
+        "pfASRLFighterHalf": v(partial(runs, "lfighter", 0.5), "last10_asr", 100),
+        "pfASRFLTrustHalf": v(partial(runs, "fltrust_bnsafe", 0.5), "last10_asr", 100),
+        "pfAccFLTrustQuarterMin": (lambda rows: DASH if not rows else f"{min(100 * float(r[acc]) for r in rows):.1f}")(
+            partial(runs, "fltrust_bnsafe", 0.25)),
+        "headAccBNsafe": v(headline(runs, "fltrust_bnsafe"), acc, 100),
         "sensFPRmax": (lambda rows: DASH if not rows else f"{max(float(r['final_fpr']) for r in rows):.2f}")(
             select(runs, experiment="A9_sensitivity_full", malicious_client_fraction=0.0)),
         "sensRecallMin": (lambda rows: DASH if not rows else f"{min(float(r['final_recall']) for r in rows):.2f}")(
@@ -754,8 +938,8 @@ def main() -> None:
     FIG.mkdir(parents=True, exist_ok=True)
     for stale in ("table_headline.tex", "table_detection.tex", "table_heterogeneity.tex"):
         (OUT / stale).unlink(missing_ok=True)
-    for build in (table_main, table_ablation, table_skew, table_adaptive, table_cost, table_sensitivity,
-                  figure_ratio, figure_heterogeneity, figure_trajectories, numbers):
+    for build in (table_main, table_ablation, table_skew, table_adaptive, table_partial, table_cost, table_sensitivity,
+                  table_seeds, table_auc, figure_ratio, figure_heterogeneity, figure_trajectories, figure_participation, numbers):
         build(runs)
     counts = defaultdict(int)
     for r in runs:

@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\caption{Separation of attackers by their reports: AUC over the first 10 rounds, range over three seeds (0.5 = chance).}
+\label{tab:auc}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}cc l cc@{}}
+\toprule
+\textbf{Reports} & $\alpha_D$ & \textbf{Run} & Raw report $a_j$ & Residual $r_j$ \\
+\midrule
+Honest & 1 & AntiFLipper & 0.79--0.83 & 0.73--0.91 \\
+Honest & 0.1 & AntiFLipper & 0.44--0.62 & 0.56--0.65 \\
+\midrule
+Faked & 1 & CR + cap & 0.54--0.70 & 0.70--0.73 \\
+Faked & 0.1 & CR + cap & 0.64--0.73 & 0.46--0.58 \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize AUC: probability that a random attacker has a lower value than a random honest client, among active clients not marked by CC, averaged over rounds 0--9. Faking rows use the CR-only runs, where no client is marked by CC.}
+\end{table}

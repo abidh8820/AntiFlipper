@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering
+\caption{Per-seed results under strong skew (CIFAR-10, $\alpha_D{=}0.1$). Accuracy (\%) and, with attackers, ASR (\%).}
+\label{tab:seeds}
+\footnotesize
+\setlength{\tabcolsep}{2.6pt}
+\begin{tabular}{@{}l ccc cccccc@{}}
+\toprule
+& \multicolumn{3}{c}{\textbf{No attack}} & \multicolumn{6}{c}{\textbf{40\% attackers}} \\
+\cmidrule(lr){2-4}\cmidrule(l){5-10}
+\textbf{Seed} & 7 & 19 & 31 & \multicolumn{2}{c}{7} & \multicolumn{2}{c}{19} & \multicolumn{2}{c}{31} \\
+\textbf{Method} & Acc. & Acc. & Acc. & Acc. & ASR & Acc. & ASR & Acc. & ASR \\
+\midrule
+FedAvg & 46.7 & 63.9 & 62.1 & 33.9 & 16.9 & 51.7 & 18.1 & 45.9 & 20.9 \\
+FedAvg (weighted) & 48.1 & 62.7 & 68.4 & 40.4 & 21.6 & 55.4 & 13.2 & 38.7 & 29.5 \\
+LFighter & -- & -- & -- & 28.5 & 16.9 & 50.2 & 17.2 & 46.0 & 22.9 \\
+FLTrust & -- & -- & -- & 32.1 & 17.0 & 41.2 & 20.5 & 44.7 & 10.5 \\
+Raw reports & -- & -- & -- & 15.6 & 14.0 & 13.1 & 23.3 & 10.3 & 10.0 \\
+\textbf{AntiFLipper} & 45.1 & 53.1 & 64.5 & 35.8 & 9.0 & 59.0 & 7.4 & 52.4 & 6.3 \\
+CR + cap (no CC) & 52.0 & 61.9 & 66.6 & -- & -- & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\\[2pt]\parbox{\linewidth}{\scriptsize Last-10-round means. --: not run in this setting.}
+\end{table}
