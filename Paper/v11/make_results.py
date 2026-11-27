@@ -612,11 +612,21 @@ def _plt():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams.update({"font.size": 7.5, "font.family": "serif", "axes.grid": True, "grid.alpha": 0.25,
-                         "grid.linestyle": ":", "legend.fontsize": 6.8, "legend.frameon": False,
+    # Times with STIX math matches the IEEEtran body text; figures are drawn at column width, so 8 pt here is 8 pt in print.
+    plt.rcParams.update({"font.size": 8, "font.family": "serif",
+                         "font.serif": ["Times New Roman", "Times", "STIXGeneral", "DejaVu Serif"],
+                         "mathtext.fontset": "stix", "axes.titlesize": 8, "axes.labelsize": 8,
+                         "xtick.labelsize": 7.5, "ytick.labelsize": 7.5, "axes.grid": True, "grid.alpha": 0.25,
+                         "grid.linestyle": ":", "legend.fontsize": 7.5, "legend.frameon": False,
                          "axes.spines.top": False, "axes.spines.right": False, "figure.dpi": 150,
                          "pdf.fonttype": 42})
     return plt
+
+
+def _top_legend(fig, handles, labels, ncol, **kw) -> None:
+    """Legend above the panels, outside the axes, so it never covers ticks, labels or panel titles."""
+    fig.legend(handles, labels, loc="lower center", ncol=ncol, bbox_to_anchor=(0.5, 1.0), columnspacing=0.9,
+               handlelength=1.8, borderaxespad=0.1, **kw)
 
 
 def _style(method):
@@ -628,7 +638,7 @@ def _style(method):
 def figure_ratio(runs) -> None:
     plt = _plt()
     methods = ["fedavg", "lfighter", "fltrust", "antiflipper", PROPOSED]
-    fig, axes = plt.subplots(1, 2, figsize=(3.45, 1.75))
+    fig, axes = plt.subplots(1, 2, figsize=(3.45, 1.6))
     for ax, metric, scale, ylabel in ((axes[0], "last10_accuracy_mean", 100, "Accuracy (%)"),
                                       (axes[1], "final_recall", 1, "Recall")):
         for method in methods:
@@ -640,9 +650,10 @@ def figure_ratio(runs) -> None:
             ax.errorbar(x, y, yerr=e, capsize=1.5, elinewidth=0.6, label=PLAIN[method], **_style(method))
         ax.set_xlabel("Malicious clients (%)"); ax.set_ylabel(ylabel); ax.set_xticks([10, 20, 30, 40])
     axes[1].set_ylim(-0.05, 1.08)
+    axes[0].set_title("(a) Test accuracy"); axes[1].set_title("(b) Recall")
+    fig.tight_layout(pad=0.3, w_pad=1.0)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.10), columnspacing=0.8, handlelength=1.6)
-    fig.tight_layout(pad=0.3, w_pad=0.8)
+    _top_legend(fig, handles, labels, ncol=3)
     fig.savefig(FIG / "gen_ratio.pdf", bbox_inches="tight"); plt.close(fig)
 
 
@@ -651,7 +662,7 @@ def figure_heterogeneity(runs) -> None:
     plt = _plt()
     methods = ["fedavg", "antiflipper", "antiflipper_cc", "antiflipper_cr", PROPOSED]
     alphas = (1.0, 0.5, 0.1)
-    fig, axes = plt.subplots(1, 2, figsize=(3.45, 1.75))
+    fig, axes = plt.subplots(1, 2, figsize=(3.45, 1.6))
     width = 0.19
     for i, method in enumerate(methods):
         acc = [stat(clean(runs, method, a), "last10_accuracy_mean", 100) for a in alphas]
@@ -671,18 +682,19 @@ def figure_heterogeneity(runs) -> None:
                          color=COLORS["fedavg_weighted"], label=PLAIN["fedavg_weighted"], zorder=4)
     for ax in axes:
         ax.set_xticks(range(len(alphas))); ax.set_xticklabels([f"{a:g}" for a in alphas]); ax.set_xlabel(r"Dirichlet $\alpha_D$")
-    axes[0].set_ylabel("Honest clients excluded"); axes[0].set_ylim(0, 20)
+    axes[0].set_ylabel("Clients"); axes[0].set_ylim(0, 20)
     axes[1].set_ylabel("Accuracy (%)")
+    axes[0].set_title("(a) Honest clients excluded"); axes[1].set_title("(b) Test accuracy")
+    fig.tight_layout(pad=0.3, w_pad=1.0)
     handles, labels = axes[1].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.16), columnspacing=0.8, handlelength=1.6)
-    fig.tight_layout(pad=0.3, w_pad=0.8)
+    _top_legend(fig, handles, labels, ncol=3)
     fig.savefig(FIG / "gen_heterogeneity.pdf", bbox_inches="tight"); plt.close(fig)
 
 
 def figure_trajectories(runs) -> None:
     """Per-round accuracy and surviving clients without attackers at alpha_D = 0.1 (one representative run)."""
     plt = _plt()
-    fig, axes = plt.subplots(1, 2, figsize=(3.45, 1.55))
+    fig, axes = plt.subplots(1, 2, figsize=(3.45, 1.45))
     for method in ("antiflipper", PROPOSED):
         candidates = sorted(clean(runs, method, 0.1), key=lambda r: r["seed"])
         run_dir = candidates[1]["_dir"] if len(candidates) > 1 else candidates[0]["_dir"]
@@ -700,11 +712,12 @@ def figure_trajectories(runs) -> None:
                 surviving[int(row["round"])] += row["excluded"] == "0"
         rounds = sorted(surviving)
         axes[1].plot(rounds, [surviving[r] for r in rounds], **style)
-    axes[0].set_xlabel("Round"); axes[0].set_ylabel("Accuracy (%, 5-round avg.)"); axes[0].set_ylim(0, 75)
-    axes[1].set_xlabel("Round"); axes[1].set_ylabel("Active clients"); axes[1].set_ylim(0, 21.5)
+    axes[0].set_xlabel("Round"); axes[0].set_ylabel("Accuracy (%)"); axes[0].set_ylim(0, 75)
+    axes[1].set_xlabel("Round"); axes[1].set_ylabel("Clients"); axes[1].set_ylim(0, 21.5)
+    axes[0].set_title("(a) Test accuracy (5-round avg.)"); axes[1].set_title("(b) Active clients")
+    fig.tight_layout(pad=0.3, w_pad=1.0)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=2, bbox_to_anchor=(0.5, 1.09), handlelength=2.0)
-    fig.tight_layout(pad=0.3, w_pad=0.8)
+    _top_legend(fig, handles, labels, ncol=2)
     fig.savefig(FIG / "gen_trajectories.pdf", bbox_inches="tight"); plt.close(fig)
 
 
@@ -734,9 +747,9 @@ def figure_participation(runs) -> None:
     if y:
         ax.plot(range(len(y)), y, color=COLORS[PROPOSED], lw=1.0, ls="--", label="AntiFLipper, full")
     ax.set_xlabel("Round"); ax.set_ylabel("Accuracy (%, 5-round avg.)"); ax.set_ylim(0, 80)
-    handles, labels = ax.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.17), columnspacing=0.8, handlelength=1.6)
     fig.tight_layout(pad=0.3)
+    handles, labels = ax.get_legend_handles_labels()
+    _top_legend(fig, handles, labels, ncol=3)
     fig.savefig(FIG / "gen_participation.pdf", bbox_inches="tight"); plt.close(fig)
 
 

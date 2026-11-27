@@ -417,3 +417,37 @@ Last-10 accuracy, seed 7 unless noted; core baselines from Results_Backup_2026-1
   - Strong under moderate skew (headline, faking, partial attacks, participation, cost), and it removes the honest-client cascade under strong skew.
   - Weak spots: accuracy under strong skew (loses to sample-weighted FedAvg without attackers; high variance with attackers), faking under strong skew (1/24), a thin margin over the reference FLTrust, and small scale (2 image datasets, N=20 for CIFAR).
   - Good enough for a conference. A strong journal would want the leave-one-out fix, a third dataset and a larger federation. Suggested those runs; not launched.
+
+### 2026-11-26 (external review of v11 conference)
+- User pasted an outside assessment (borderline accept, mid-tier conference) and asked whether I agree. I checked its numbers against generated/numbers.tex and table_partial.tex; all correct (skew: 49.1 vs 44.8 weighted FedAvg, 2/3 seeds; clean 54.3 vs 59.7; faking under skew 1/24).
+- Agreed with both edits: (1) the conclusion overclaims: the "more accurate than all six baselines" claim holds only for moderate-skew full flips (FedAvg wins the partial flips), the 18.3→0 figure comes from clean runs, and "highest mean accuracy" under skew with attackers needs a hedge (±11.9, 2/3 vs weighted FedAvg); (2) the participation Rec*/FPR* columns compare different metrics, so drop the bolding/relabel them.
+- Also agreed: no more runs for the conference version; leave-one-out runs only for the journal.
+- Next: apply the two edits if the user says go.
+
+### 2026-11-26 (PhD-application brief)
+- User asked for a fully cited brief (status, summaries, method, results, story, limitations, future work, claim check, CV claims) at d:\Code\Personal-Repo-2026\Resources\briefs\antiflipper_brief.md. D: is listed but not accessible, so it was written to Note/antiflipper_brief.md (untracked, not committed).
+- Findings: no arXiv record; the manuscript has no code link (remote origin = github.com/abidh8820/AntiFlipper); only the GLOBECOM 2026 review set is in the repo, so the "3 rejections" cannot be verified from files; the partial-flip detection rounds differ between the log (~21.5/35.6) and the manuscript (24/39) — unexplained.
+- Claim check: the "1.1% client overhead" and "scalar accuracy report" claims are outdated (now 6.8% measured; per-class counts); "every attacker, no honest client" holds only in the main setting; "traced the cause and redesigned" is unsupported as sole credit, because the log records the diagnosis and residual design as AI-assisted and code as delegated.
+- SSH to NDAG timed out twice today; run status taken from the log (no AntiFLipper runs in progress).
+- Next: the user moves the brief to D: when available; apply the two pending v11 conclusion/table edits if approved.
+
+### 2026-11-27 (abstract rewrite)
+- NDAG PC offline: Tailscale shows it offline, last seen ~16 h before the check; SSH and ping time out. Someone at the lab must check power/network; no AntiFLipper services autostart.
+- User: the abstract was hard to understand and the contributions should be visible. Rewrote both v11 abstracts in plain order (setting → attack → accuracy feedback → numbered contributions (1)–(3) conference / (1)–(4) journal → results → open case). Dropped the fragile "highest mean accuracy under strong skew" claim; strong skew now leads with zero honest exclusions and the lowest ASR (honest reports).
+- Word counts were 291/343, now 249/249 rendered (IEEE limit 250). Intro contribution bullets now have bold lead-ins (conference: Why accuracy feedback fails / AntiFLipper / Evaluation; journal adds Analysis of the residual).
+- Both PDFs rebuilt: conference 8 pp, journal 11 pp, 0 warnings. Not committed.
+- Still pending: conclusion scope (AntiFlipper_v11.tex:254) and the participation detection columns (agreed 2026-11-26).
+
+### 2026-11-27 (structure, contributions, figures, related work, plagiarism check)
+- User feedback on the numbered abstract: an abstract should be a plain summary with no (1)/(2) points and no "X: Y" colon sentences; "why accuracy feedback fails" is an observation, not a contribution; evaluation is not a contribution. Contributions should be properties of AntiFLipper (lightweight, works under heterogeneity, etc.).
+- Both versions now:
+  - Abstract rewritten as prose (245 / 249 words rendered).
+  - Contribution bullets: label-mix-aware feedback defense; lightweight, data-free design (84 B, 6.8% client time, 173 vs 183 ms server); robustness to heterogeneity (18.3 → 0 honest exclusions, lowest ASR every seed); robustness to evasive attackers (faking, partial flips, half participation; 72.0 vs ≤69.2). The journal adds "an explanation of when the residual works". A sentence after the list states the open case.
+  - Section "AntiFLipper" renamed "Methodology". "Analysis" renamed "Theoretical Analysis" and moved after Results (conference: before Limitations; journal: before Discussion). Forward references reworded; roadmap updated.
+  - Prose colon constructions removed throughout (the title, the algorithm caption and the bullet lead-ins are kept).
+  - Conclusion narrowed (the agreed edit): moderate-skew full flips only; 18.3 → 0 tied to runs without attackers; "highest mean accuracy under skew" removed.
+  - Related work expanded with 12 new references, all verified against the arXiv API: steinhardt2017certified, bhagoji2019analyzing, sun2019really, pillutla2022robust, karimireddy2021history, karimireddy2022bucketing, zhao2018noniid, xie2019zeno, zhang2022fldetector, shen2016auror (ACSAC, not on arXiv), xu2022fedcorr, song2023noisylabels. The conference version has 4 paragraphs; the journal adds a "Learning with noisy labels" subsection.
+  - Figs. 2–4 and the participation figure: Times New Roman + STIX math (was DejaVu Serif), (a)/(b) panel titles, legend above the panels (it used to overlap the axes), slightly shorter. Captions refer to (a)/(b). Change made in make_results.py (_plt, _top_legend).
+- Conference trimmed back to 8 pp (privacy, ablation, partial-flip, participation, cost and AUC sentences shortened). Journal 12 pp (was 11). 0 warnings.
+- Plagiarism check: arXiv abstracts of 35 of the 48 cited references were compared by word n-grams with both manuscripts. 0 shared 5-grams after rewording one new sentence that echoed Sun et al. This is not a full iThenticate/Turnitin check (full texts and non-arXiv papers are not covered). The conference and journal versions overlap heavily, which needs disclosure if both are submitted.
+- Not committed. Still pending: the participation table Rec*/FPR* relabel (make_results.py table_partial).

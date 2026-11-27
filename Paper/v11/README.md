@@ -5,7 +5,7 @@ Two versions built from the same generated tables, figures and macros:
 | File | Format | Length |
 |---|---|---|
 | `AntiFlipper_v11.tex` | IEEE conference (GLOBECOM style) | **8 pages** including references (7 of body); no overfull boxes |
-| `AntiFlipper_v11_journal.tex` | IEEE Transactions (`journal` class) | **11 pages** including references; no overfull boxes |
+| `AntiFlipper_v11_journal.tex` | IEEE Transactions (`journal` class) | **12 pages** including references; no overfull boxes |
 
 v11 is a full rewrite of v10 (`../v10`, left unchanged). It adds the rev2 controls, the rev3 runs (partial participation,
 baseline partial flips) and a corrected account of report faking.
@@ -104,7 +104,7 @@ v10 said that faked reports cannot be told apart from honest ones (Prop. 3), yet
 | GLOBECOM R1 | Bulyan, FLAME, CRFL, trust-based baselines | FLAME, FLTrust, LFighter, Multi-Krum, Median. Bulyan is inapplicable (N≥4f+3) and CRFL targets backdoors; both are stated |
 | GLOBECOM R1/R2 | seeds and std, sensitivity, communication cost | 3 seeds with std; sensitivity in VII-G; 84 B report (Table V) |
 | GLOBECOM R1 | other domains, edge hardware, dropout | Partial participation run (rev3, Table IV); data-dependent dropout, domains and hardware in Limitations |
-| GLOBECOM R1/R3 | privacy of reports, including repeated rounds | Analysis "Privacy" (secure-aggregation variant, not implemented) |
+| GLOBECOM R1/R3 | privacy of reports, including repeated rounds | Theoretical Analysis "Privacy" (secure-aggregation variant, not implemented) |
 | GLOBECOM R2 | fake reports | Threat model, Prop. 3, Table IV, plus the leakage and residual analysis |
 | GLOBECOM R2 | α_D=0.1 | Fig. 2, Fig. 3, Tables II–IV |
 | GLOBECOM R2 | convergence | Exclusion bound plus trajectories; no proof (stated) |
